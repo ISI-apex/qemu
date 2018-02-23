@@ -53,6 +53,7 @@
 #define RTC_ADDR            0xffa60000
 #define RTC_IRQ             26
 
+#define HPSC
 static const uint64_t gem_addr[XLNX_ZYNQMP_NUM_GEMS] = {
     0xFF0B0000, 0xFF0C0000, 0xFF0D0000, 0xFF0E0000,
 };
@@ -136,6 +137,46 @@ static void xlnx_zynqmp_create_rpu(XlnxZynqMPState *s, const char *boot_cpu,
     }
 }
 
+
+#ifdef HPSC
+static void hpsc_create_trch(XlnxZynqMPState *s, const char *boot_cpu,
+                                   Error **errp)
+{
+    Error *err = NULL;
+    int i;
+    int num_m4 = 1;
+
+    for (i = 0; i < num_m4; i++) {
+        char *name;
+
+        object_initialize(&s->trch_cpu[i], sizeof(s->trch_cpu[i]),
+                          "cortex-m4-" TYPE_ARM_CPU);
+        object_property_add_child(OBJECT(s), "trch-cpu[*]",
+                                  OBJECT(&s->trch_cpu[i]), &error_abort);
+
+        name = object_get_canonical_path_component(OBJECT(&s->trch_cpu[i]));
+        if (strcmp(name, boot_cpu)) {
+            /* Secondary CPUs start in PSCI powered-down state */
+            object_property_set_bool(OBJECT(&s->trch_cpu[i]), true,
+                                     "start-powered-off", &error_abort);
+        } else {
+            s->boot_cpu_ptr = &s->trch_cpu[i];
+        }
+        g_free(name);
+
+        object_property_set_bool(OBJECT(&s->trch_cpu[i]), true, "reset-hivecs",
+                                 &error_abort);
+        object_property_set_bool(OBJECT(&s->trch_cpu[i]), true, "realized",
+                                 &err);
+        if (err) {
+            error_propagate(errp, err);
+            return;
+        }
+    }
+}
+
+#endif
+/* DK: this is NOT called */
 static void xlnx_zynqmp_init(Object *obj)
 {
     XlnxZynqMPState *s = XLNX_ZYNQMP(obj);
@@ -334,6 +375,10 @@ static void xlnx_zynqmp_realize(DeviceState *dev, Error **errp)
         error_propagate(errp, err);
         return;
     }
+
+#ifdef HPSC
+	hpsc_create_trch(s, boot_cpu, &err);
+#endif
 
     if (!s->boot_cpu_ptr) {
         error_setg(errp, "ZynqMP Boot cpu %s not found", boot_cpu);

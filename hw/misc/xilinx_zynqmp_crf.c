@@ -32,6 +32,7 @@
 
 #include "hw/fdt_generic_util.h"
 
+#define HPSC
 #ifndef XILINX_CRF_APB_ERR_DEBUG
 #define XILINX_CRF_APB_ERR_DEBUG 0
 #endif
@@ -210,6 +211,25 @@ DEP_REG32(RST_FPD_TOP, 0x100)
     DEP_FIELD(RST_FPD_TOP, GT_RESET, 1, 2)
     DEP_FIELD(RST_FPD_TOP, SATA_RESET, 1, 1)
 DEP_REG32(RST_FPD_APU, 0x104)
+#ifdef HPSC
+    DEP_FIELD(RST_FPD_APU, ACPU7_PWRON_RESET, 1, 17)
+    DEP_FIELD(RST_FPD_APU, ACPU6_PWRON_RESET, 1, 16)
+    DEP_FIELD(RST_FPD_APU, ACPU5_PWRON_RESET, 1, 15)
+    DEP_FIELD(RST_FPD_APU, ACPU4_PWRON_RESET, 1, 14)
+    DEP_FIELD(RST_FPD_APU, ACPU3_PWRON_RESET, 1, 13)
+    DEP_FIELD(RST_FPD_APU, ACPU2_PWRON_RESET, 1, 12)
+    DEP_FIELD(RST_FPD_APU, ACPU1_PWRON_RESET, 1, 11)
+    DEP_FIELD(RST_FPD_APU, ACPU0_PWRON_RESET, 1, 10)
+    DEP_FIELD(RST_FPD_APU, APU_L2_RESET, 1, 8)
+    DEP_FIELD(RST_FPD_APU, ACPU7_RESET, 1, 7)
+    DEP_FIELD(RST_FPD_APU, ACPU6_RESET, 1, 6)
+    DEP_FIELD(RST_FPD_APU, ACPU5_RESET, 1, 5)
+    DEP_FIELD(RST_FPD_APU, ACPU4_RESET, 1, 4)
+    DEP_FIELD(RST_FPD_APU, ACPU3_RESET, 1, 3)
+    DEP_FIELD(RST_FPD_APU, ACPU2_RESET, 1, 2)
+    DEP_FIELD(RST_FPD_APU, ACPU1_RESET, 1, 1)
+    DEP_FIELD(RST_FPD_APU, ACPU0_RESET, 1, 0)
+#else
     DEP_FIELD(RST_FPD_APU, ACPU3_PWRON_RESET, 1, 13)
     DEP_FIELD(RST_FPD_APU, ACPU2_PWRON_RESET, 1, 12)
     DEP_FIELD(RST_FPD_APU, ACPU1_PWRON_RESET, 1, 11)
@@ -219,6 +239,7 @@ DEP_REG32(RST_FPD_APU, 0x104)
     DEP_FIELD(RST_FPD_APU, ACPU2_RESET, 1, 2)
     DEP_FIELD(RST_FPD_APU, ACPU1_RESET, 1, 1)
     DEP_FIELD(RST_FPD_APU, ACPU0_RESET, 1, 0)
+#endif
 DEP_REG32(RST_DDR_SS, 0x108)
     DEP_FIELD(RST_DDR_SS, DDR_RESET, 1, 3)
     DEP_FIELD(RST_DDR_SS, APM_RESET, 1, 2)
@@ -373,10 +394,19 @@ static DepRegisterAccessInfo crf_apb_regs_info[] = {
         .reset = 0xf9ffe,
         .rsvd = 0xf06001,
     },{ .name = "RST_FPD_APU",  .decode.addr = A_RST_FPD_APU,
+#ifdef HPSC
+        .reset = 0x3fdff,
+        .rsvd = 0xc0200,
+#else
         .reset = 0x3d0f,
         .rsvd = 0xc2f0,
+#endif
         .gpios = (DepRegisterGPIOMapping[]) {
+#ifdef HPSC
+            { .name = "RST_A9", .bit_pos = 0, .num = 8 },
+#else
             { .name = "RST_A9", .bit_pos = 0, .num = 4 },
+#endif
             {},
         },
         .inhibit_reset = 1u << 31,
@@ -450,7 +480,11 @@ static const FDTGenericGPIOSet crf_gpios[] = {
     {
         .names = &fdt_generic_gpio_name_set_gpio,
         .gpios = (FDTGenericGPIOConnection[]) {
+#ifdef HPSC
+            { .name = "RST_A9",   .fdt_index = 0,   .range = 8 },
+#else
             { .name = "RST_A9",   .fdt_index = 0,   .range = 4 },
+#endif
             { },
         }
     },

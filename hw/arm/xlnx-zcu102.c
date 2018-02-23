@@ -36,6 +36,8 @@ typedef struct XlnxZCU102 {
     bool virt;
 } XlnxZCU102;
 
+#define HPSC
+
 #define TYPE_ZCU102_MACHINE   MACHINE_TYPE_NAME("xlnx-zcu102")
 #define ZCU102_MACHINE(obj) \
     OBJECT_CHECK(XlnxZCU102, (obj), TYPE_ZCU102_MACHINE)
@@ -74,6 +76,7 @@ static void zcu102_set_virt(Object *obj, bool value, Error **errp)
     s->virt = value;
 }
 
+/* DK: this is called */
 static void xlnx_zynqmp_init(XlnxZCU102 *s, MachineState *machine)
 {
     int i;
@@ -205,6 +208,7 @@ static void xlnx_ep108_machine_instance_init(Object *obj)
     s->virt = false;
 }
 
+/* DK: this is called */
 static void xlnx_ep108_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
@@ -231,6 +235,7 @@ static void xlnx_ep108_machine_init_register_types(void)
     type_register_static(&xlnx_ep108_machine_init_typeinfo);
 }
 
+/* DK: this is NOT called */
 static void xlnx_zcu102_init(MachineState *machine)
 {
     XlnxZCU102 *s = ZCU102_MACHINE(machine);
@@ -238,6 +243,7 @@ static void xlnx_zcu102_init(MachineState *machine)
     xlnx_zynqmp_init(s, machine);
 }
 
+/* DK: this is NOT called */
 static void xlnx_zcu102_machine_instance_init(Object *obj)
 {
     XlnxZCU102 *s = ZCU102_MACHINE(obj);
@@ -262,6 +268,7 @@ static void xlnx_zcu102_machine_instance_init(Object *obj)
                                     NULL);
 }
 
+/* DK: this is called */
 static void xlnx_zcu102_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
@@ -272,7 +279,11 @@ static void xlnx_zcu102_machine_class_init(ObjectClass *oc, void *data)
     mc->block_default_type = IF_IDE;
     mc->units_per_default_bus = 1;
     mc->ignore_memory_transaction_failures = true;
+#ifdef HPSC
+    mc->max_cpus = XLNX_ZYNQMP_NUM_APU_CPUS + XLNX_ZYNQMP_NUM_RPU_CPUS + 1;	/* for TRCH */
+#else
     mc->max_cpus = XLNX_ZYNQMP_NUM_APU_CPUS + XLNX_ZYNQMP_NUM_RPU_CPUS;
+#endif
     mc->default_cpus = XLNX_ZYNQMP_NUM_APU_CPUS;
 }
 

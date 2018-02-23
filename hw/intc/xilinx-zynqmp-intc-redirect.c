@@ -41,14 +41,24 @@
 #define XILINX_ZYNQMP_INTC_REDIRECT(obj) \
      OBJECT_CHECK(INTCRedirect, (obj), TYPE_XILINX_ZYNQMP_INTC_REDIRECT)
 
+#define HPSC
+
+#ifdef HPSC
+#define NUM_LINES_FROM_GIC  8
+#else
 #define NUM_LINES_FROM_GIC  4
+#endif
 
 typedef struct INTCRedirect {
     /* private */
     DeviceState parent;
     /* public */
 
+#ifdef HPSC
+    qemu_irq cpu_out[8];
+#else
     qemu_irq cpu_out[4];
+#endif
     qemu_irq pmu_out;
 
     bool cpu_pwrdwn_en;
@@ -94,8 +104,13 @@ static void intc_redirect_init(Object *obj)
     INTCRedirect *s = XILINX_ZYNQMP_INTC_REDIRECT(obj);
     DeviceState *dev = DEVICE(obj);
 
+#ifdef HPSC
+    qdev_init_gpio_in_named(dev, intc_redirect_in_from_gic, "gic_in", 8);
+    qdev_init_gpio_out_named(dev, s->cpu_out, "cpu_out", 8);
+#else
     qdev_init_gpio_in_named(dev, intc_redirect_in_from_gic, "gic_in", 4);
     qdev_init_gpio_out_named(dev, s->cpu_out, "cpu_out", 4);
+#endif
     qdev_init_gpio_out_named(dev, &s->pmu_out, "pmu_out", 1);
     qdev_init_gpio_in_named(dev, intc_redirect_pwr_cntrl_enable,
                             "cpu_pwrdwn_en", 1);
@@ -122,7 +137,11 @@ static const FDTGenericGPIOSet intc_redirect_client_gpios[] = {
     {
         .names = &fdt_generic_gpio_name_set_interrupts,
         .gpios = (FDTGenericGPIOConnection[]) {
+#ifdef HPSC
+            { .name = "cpu_out",        .range = 8 },
+#else
             { .name = "cpu_out",        .range = 4 },
+#endif
             { },
         },
     },
@@ -140,7 +159,11 @@ static const FDTGenericGPIOSet intc_redirect_controller_gpios[] = {
     {
         .names = &fdt_generic_gpio_name_set_interrupts,
         .gpios = (FDTGenericGPIOConnection[]) {
+#ifdef HPSC
+            { .name = "gic_in",        .range = 8 },
+#else
             { .name = "gic_in",        .range = 4 },
+#endif
             { },
         },
     },

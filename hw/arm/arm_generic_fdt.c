@@ -29,6 +29,8 @@
 #include "hw/fdt_generic_util.h"
 #include "hw/fdt_generic_devices.h"
 
+#define HPSC
+
 #ifndef ARM_GENERIC_FDT_DEBUG
 #define ARM_GENERIC_FDT_DEBUG 3
 #endif
@@ -598,9 +600,15 @@ static void arm_generic_fdt_machine_init(MachineClass *mc)
     mc->desc = "ARM device tree driven machine model";
     mc->init = arm_generic_fdt_init;
     mc->ignore_memory_transaction_failures = true;
+#ifdef HPSC
+    /* 4 A53s and 2 R5s and 1 M4 */
+    mc->max_cpus = 11;
+    mc->default_cpus = 11;
+#else
     /* 4 A53s and 2 R5s */
     mc->max_cpus = 6;
     mc->default_cpus = 6;
+#endif
 }
 
 static void arm_generic_fdt_7000_machine_init(MachineClass *mc)

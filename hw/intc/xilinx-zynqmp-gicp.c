@@ -42,7 +42,12 @@
 #define XILINX_GIC_PROXY(obj) \
      OBJECT_CHECK(GICProxy, (obj), TYPE_XILINX_GIC_PROXY)
 
+#define HPSC
+#ifdef HPSC
+#define MAX_INTS            165
+#else
 #define MAX_INTS            160
+#endif
 #define GICP_GROUPS         5
 #define GICP_GROUP_STRIDE   0x14
 

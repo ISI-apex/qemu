@@ -23,6 +23,8 @@
 #include "kvm-consts.h"
 #include "hw/registerfields.h"
 
+#define HPSC_TRCH
+
 #if defined(TARGET_AARCH64)
   /* AArch64 definitions */
 #  define TARGET_LONG_BITS 64
@@ -2381,10 +2383,18 @@ static inline ARMMMUIdx arm_v7m_mmu_idx_for_secstate(CPUARMState *env,
         mmu_idx = secstate ? ARMMMUIdx_MSPriv : ARMMMUIdx_MPriv;
     }
 
+#ifdef HPSC_TRCH /* DK: this must be fixed later */
+// printf("%s: env->nvic = 0x%lx\n", __func__, (unsigned long) env->nvic);
+    if (env->nvic != 0) {
+        if (armv7m_nvic_neg_prio_requested(env->nvic, secstate)) {
+          mmu_idx = secstate ? ARMMMUIdx_MSNegPri : ARMMMUIdx_MNegPri;
+      }
+    }
+#else
     if (armv7m_nvic_neg_prio_requested(env->nvic, secstate)) {
         mmu_idx = secstate ? ARMMMUIdx_MSNegPri : ARMMMUIdx_MNegPri;
     }
-
+#endif
     return mmu_idx;
 }
 

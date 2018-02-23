@@ -57,6 +57,9 @@
 
 #define DB_PRINT(fmt, args...) DB_PRINT_L(1, fmt, ## args)
 
+#define HPSC
+#define HPSC_TRCH
+
 DEP_REG32(RVBARADDR0L, 0x40)
 DEP_REG32(RVBARADDR0H, 0x44)
 DEP_REG32(RVBARADDR1L, 0x48)
@@ -65,6 +68,16 @@ DEP_REG32(RVBARADDR2L, 0x50)
 DEP_REG32(RVBARADDR2H, 0x54)
 DEP_REG32(RVBARADDR3L, 0x58)
 DEP_REG32(RVBARADDR3H, 0x5c)
+#ifdef HPSC
+REG32(RVBARADDR4L, 0x60)
+REG32(RVBARADDR4H, 0x64)
+REG32(RVBARADDR5L, 0x68)
+REG32(RVBARADDR5H, 0x6c)
+REG32(RVBARADDR6L, 0x70)
+REG32(RVBARADDR6H, 0x74)
+REG32(RVBARADDR7L, 0x78)
+REG32(RVBARADDR7H, 0x7c)
+#endif
 DEP_REG32(PWRCTL, 0x90)
     DEP_FIELD(PWRCTL, CPUPWRDWNREQ, 3, 0)
 
@@ -150,6 +163,25 @@ static void zynqmp_apu_pwrctl_post_write(DepRegisterInfo *reg, uint64_t val)
 }
 
 static const DepRegisterAccessInfo zynqmp_apu_regs_info[] = {
+#ifdef HPSC_TRCH
+#define RVBAR_REGDEF(n) \
+    {   .name = "RVBAR CPU " #n " Low",  .decode.addr = A_RVBARADDR ## n ## L, \
+            .reset = 0xfffff000ul,                                             \
+            .post_write = zynqmp_apu_rvbar_post_write,                        \
+    },{ .name = "RVBAR CPU " #n " High", .decode.addr = A_RVBARADDR ## n ## H, \
+            .post_write = zynqmp_apu_rvbar_post_write,                        \
+    }
+    RVBAR_REGDEF(0),
+    RVBAR_REGDEF(1),
+    RVBAR_REGDEF(2),
+    RVBAR_REGDEF(3), 
+#ifdef HPSC
+    RVBAR_REGDEF(4),
+    RVBAR_REGDEF(5),
+    RVBAR_REGDEF(6),
+    RVBAR_REGDEF(7), 
+#endif
+#else
 #define RVBAR_REGDEF(n) \
     {   .name = "RVBAR CPU " #n " Low",  .decode.addr = A_RVBARADDR ## n ## L, \
             .reset = 0xffff0000ul,                                             \
@@ -160,7 +192,15 @@ static const DepRegisterAccessInfo zynqmp_apu_regs_info[] = {
     RVBAR_REGDEF(0),
     RVBAR_REGDEF(1),
     RVBAR_REGDEF(2),
-    RVBAR_REGDEF(3), { .name = "PWRCTL",  .decode.addr = A_PWRCTL,
+    RVBAR_REGDEF(3), 
+#ifdef HPSC
+    RVBAR_REGDEF(4),
+    RVBAR_REGDEF(5),
+    RVBAR_REGDEF(6),
+    RVBAR_REGDEF(7), 
+#endif
+#endif
+    { .name = "PWRCTL",  .decode.addr = A_PWRCTL,
         .post_write = zynqmp_apu_pwrctl_post_write,
     }
 };

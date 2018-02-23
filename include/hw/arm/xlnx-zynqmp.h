@@ -34,8 +34,16 @@
 #define XLNX_ZYNQMP(obj) OBJECT_CHECK(XlnxZynqMPState, (obj), \
                                        TYPE_XLNX_ZYNQMP)
 
+#define HPSC
+#ifdef HPSC
+#define XLNX_ZYNQMP_NUM_APU_CPUS 8
+#else
 #define XLNX_ZYNQMP_NUM_APU_CPUS 4
+#endif
+#define RPU_IMPL
+#ifdef RPU_IMPL
 #define XLNX_ZYNQMP_NUM_RPU_CPUS 2
+#endif
 #define XLNX_ZYNQMP_NUM_GEMS 4
 #define XLNX_ZYNQMP_NUM_UARTS 2
 #define XLNX_ZYNQMP_NUM_SDHCI 2
@@ -74,7 +82,12 @@ typedef struct XlnxZynqMPState {
 
     /*< public >*/
     ARMCPU apu_cpu[XLNX_ZYNQMP_NUM_APU_CPUS];
+#ifdef RPU_IMPL
     ARMCPU rpu_cpu[XLNX_ZYNQMP_NUM_RPU_CPUS];
+#endif
+#ifdef HPSC
+    ARMCPU trch_cpu[1];
+#endif
     GICState gic;
     MemoryRegion gic_mr[XLNX_ZYNQMP_GIC_REGIONS][XLNX_ZYNQMP_GIC_ALIASES];
 

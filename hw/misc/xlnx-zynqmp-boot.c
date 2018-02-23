@@ -36,6 +36,8 @@
 
 #include "hw/misc/xlnx-zynqmp-pmufw-cfg.h"
 
+#define HPSC
+
 #ifndef XILINX_ZYNQMP_BOOT_DEBUG
 #define XILINX_ZYNQMP_BOOT_DEBUG 0
 #endif
@@ -166,6 +168,9 @@ static void pm_ipi_send(ZynqMPBoot *s,
 
 static void release_cpu(ZynqMPBoot *s)
 {
+#ifdef HPSC_TRY
+return;
+#endif
     CPUState *cpu = qemu_get_cpu(s->cfg.cpu_num);
     CPUClass *cc = CPU_GET_CLASS(cpu);
     uint64_t pc = 0;

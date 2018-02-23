@@ -33,6 +33,7 @@
 
 /* #define DEBUG_GIC */
 
+#define HPSC
 #ifdef DEBUG_GIC
 #define DEBUG_GIC_GATE 1
 #else
@@ -93,7 +94,11 @@ static inline void gic_dump_lrs(GICState *s, const char *prefix)
 static inline int gic_get_current_cpu(GICState *s)
 {
     if (s->num_cpu > 1) {
+#ifdef HPSC
+        return current_cpu->cpu_index;
+#else
         return current_cpu->cpu_index % 4;
+#endif
     }
     return 0;
 }

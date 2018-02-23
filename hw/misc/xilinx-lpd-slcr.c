@@ -34,6 +34,11 @@
 #include "hw/intc/xlnx_scu_gic.h"
 #include "hw/fdt_generic_util.h"
 
+//#define HPSC_TRCH
+#ifdef HPSC_TRCH
+#include "hw/intc/armv7m_nvic.h"
+#endif
+#define RPU_IMPL
 #ifndef XILINX_LPD_SLCR_ERR_DEBUG
 #define XILINX_LPD_SLCR_ERR_DEBUG 0
 #endif
@@ -147,11 +152,16 @@ typedef struct LPD_SLCR {
     MemoryRegion iomem;
     qemu_irq irq_isr;
 
+#ifdef RPU_IMPL
     /* GIC associated to the RPUs. */
     XlnxSCUGICState *rpu_gic;
+#endif
     /* GIC associated to the APUs. */
     XlnxSCUGICState *apu_gic;
 
+#ifdef HPSC_TRCH
+    XlnxSCUGICState *trch_gic;
+#endif
     uint32_t regs[R_MAX];
     DepRegisterInfo regs_info[R_MAX];
 } LPD_SLCR;
@@ -231,8 +241,13 @@ static uint64_t mutex_prew(DepRegisterInfo *reg, uint64_t val64)
 /* RPU, APU IRQ injection callbacks. */
 static void lpd_slcr_peripheral_irq_update(LPD_SLCR *s, uint8_t bank)
 {
+#ifdef RPU_IMPL
     xlnx_scu_gic_set_intr(s->rpu_gic, bank, s->regs[GIC_IRQ_STATUS(bank)], 1);
+#endif
     xlnx_scu_gic_set_intr(s->apu_gic, bank, s->regs[GIC_IRQ_STATUS(bank)], 1);
+#ifdef HPSC_TRCH
+    xlnx_scu_gic_set_intr(s->trch_gic, bank, s->regs[GIC_IRQ_STATUS(bank)], 1);
+#endif
 }
 
 static uint64_t lpd_slcr_ier_prew(DepRegisterInfo *reg, uint64_t val64)
@@ -634,16 +649,24 @@ static void lpd_slcr_realize(DeviceState *dev, Error **errp)
     const char *prefix = object_get_canonical_path(OBJECT(dev));
     unsigned int i;
 
+#ifdef RPU_IMPL
     if (!s->rpu_gic) {
         error_set(errp, ERROR_CLASS_GENERIC_ERROR, "gic-for-rpu");
         return;
     }
+#endif
 
     if (!s->apu_gic) {
         error_set(errp, ERROR_CLASS_GENERIC_ERROR, "gic-for-apu");
         return;
     }
 
+#ifdef HPSC_TRCH 
+    if (!s->trch_gic) {
+        error_set(errp, ERROR_CLASS_GENERIC_ERROR, "gic-for-trch");
+        return;
+    }
+#endif
     for (i = 0; i < ARRAY_SIZE(lpd_slcr_regs_info); ++i) {
         DepRegisterInfo *r = &s->regs_info[lpd_slcr_regs_info[i].decode.addr/4];
 
@@ -671,16 +694,25 @@ static void lpd_slcr_init(Object *obj)
 
     /* Link to the GIC which allow to inject irq through registers.
      */
+#ifdef RPU_IMPL
     object_property_add_link(obj, "gic-for-rpu", TYPE_XLNX_SCU_GIC,
                              (Object **)&s->rpu_gic,
                              qdev_prop_allow_set_link_before_realize,
                              OBJ_PROP_LINK_UNREF_ON_RELEASE,
                              &error_abort);
+#endif
     object_property_add_link(obj, "gic-for-apu", TYPE_XLNX_SCU_GIC,
                              (Object **)&s->apu_gic,
                              qdev_prop_allow_set_link_before_realize,
                              OBJ_PROP_LINK_UNREF_ON_RELEASE,
                              &error_abort);
+#ifdef HPSC_TRCH
+    object_property_add_link(obj, "gic-for-trch", TYPE_NVIC,
+                             (Object **)&s->trch_gic,
+                             qdev_prop_allow_set_link_before_realize,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+#endif
 }
 
 static const VMStateDescription vmstate_lpd_slcr = {

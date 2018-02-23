@@ -33,6 +33,7 @@
 
 #include "hw/fdt_generic_util.h"
 
+#define HPSC
 #define TYPE_XILINX_IPI "xlnx.zynqmp_ipi"
 
 #define XILINX_IPI(obj) \
@@ -187,8 +188,13 @@ static void ipi_trig_postw(DepRegisterInfo *reg, uint64_t val64) {
 
 static DepRegisterAccessInfo ipi_regs_info[] = {
     {   .name = "IPI_TRIG",  .decode.addr = A_IPI_TRIG,
+#ifdef HPSC
+        .rsvd = 0xf0f0fcee,
+        .ro = 0xf0f0fcee,
+#else
         .rsvd = 0xf0f0fcfe,
         .ro = 0xf0f0fcfe,
+#endif
         .post_write = ipi_trig_postw,
         .gpios = (DepRegisterGPIOMapping[]) {
             GPIO_TRIG_OUT(APU),
@@ -205,12 +211,23 @@ static DepRegisterAccessInfo ipi_regs_info[] = {
             { },
         }
     },{ .name = "IPI_OBS",  .decode.addr = A_IPI_OBS,
+#ifdef HPSC
+        .rsvd = 0xf0f0fcee,
+        .ro = 0xffffffff,
+#else
         .rsvd = 0xf0f0fcfe,
         .ro = 0xffffffff,
+#endif
     },{ .name = "IPI_ISR",  .decode.addr = A_IPI_ISR,
+#ifdef HPSC
+        .rsvd = 0xf0f0fcee,
+        .ro = 0xf0f0fcee,
+        .w1c = 0xf0f0311,
+#else
         .rsvd = 0xf0f0fcfe,
         .ro = 0xf0f0fcfe,
         .w1c = 0xf0f0301,
+#endif
         .post_write = ipi_isr_postw,
         .gpios = (DepRegisterGPIOMapping[]) {
             GPIO_OBS_OUT(APU),
@@ -227,16 +244,32 @@ static DepRegisterAccessInfo ipi_regs_info[] = {
             { },
         }
     },{ .name = "IPI_IMR",  .decode.addr = A_IPI_IMR,
+#ifdef HPSC
+        .reset = 0xf0f0311,
+        .rsvd = 0xf0f0fcee,
+        .ro = 0xffffffff,
+#else
         .reset = 0xf0f0301,
         .rsvd = 0xf0f0fcfe,
         .ro = 0xffffffff,
+#endif
     },{ .name = "IPI_IER",  .decode.addr = A_IPI_IER,
+#ifdef HPSC
+        .rsvd = 0xf0f0fcee,
+        .ro = 0xf0f0fcee,
+#else
         .rsvd = 0xf0f0fcfe,
         .ro = 0xf0f0fcfe,
+#endif
         .pre_write = ipi_ier_prew,
     },{ .name = "IPI_IDR",  .decode.addr = A_IPI_IDR,
+#ifdef HPSC
+        .rsvd = 0xf0f0fcee,
+        .ro = 0xf0f0fcee,
+#else
         .rsvd = 0xf0f0fcfe,
         .ro = 0xf0f0fcfe,
+#endif
         .pre_write = ipi_idr_prew,
     }
 };
