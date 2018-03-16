@@ -5060,7 +5060,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .opc0 = 3, .opc1 = 0, .crn = 0, .crm = 3, .opc2 = 7,
               .access = PL1_R, .type = ARM_CP_CONST,
               .resetvalue = 0 },
-            { .name = "PMCEID0", .state = ARM_CP_STATE_AA32,
+            { .name = "PMCEID0", .state = ARM_CP_STATE_AA32,	/* DK: OK for R52 */
               .cp = 15, .opc1 = 0, .crn = 9, .crm = 12, .opc2 = 6,
               .access = PL0_R, .accessfn = pmreg_access, .type = ARM_CP_CONST,
               .resetvalue = cpu->pmceid0 },
@@ -5068,7 +5068,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .opc0 = 3, .opc1 = 3, .crn = 9, .crm = 12, .opc2 = 6,
               .access = PL0_R, .accessfn = pmreg_access, .type = ARM_CP_CONST,
               .resetvalue = cpu->pmceid0 },
-            { .name = "PMCEID1", .state = ARM_CP_STATE_AA32,
+            { .name = "PMCEID1", .state = ARM_CP_STATE_AA32,	/* DK: OK for R52 */
               .cp = 15, .opc1 = 0, .crn = 9, .crm = 12, .opc2 = 7,
               .access = PL0_R, .accessfn = pmreg_access, .type = ARM_CP_CONST,
               .resetvalue = cpu->pmceid1 },
@@ -5091,24 +5091,24 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         define_arm_cp_regs(cpu, v8_idregs);
         define_arm_cp_regs(cpu, v8_cp_reginfo);
     }
-    if (arm_feature(env, ARM_FEATURE_EL2)) {
+    if (arm_feature(env, ARM_FEATURE_EL2)) {	/* DK: case for R52. original code */
         uint64_t vmpidr_def = mpidr_read_val(env);
         ARMCPRegInfo vpidr_regs[] = {
-            { .name = "VPIDR", .state = ARM_CP_STATE_AA32,
+            { .name = "VPIDR", .state = ARM_CP_STATE_AA32,	/* DK: OK for R52 */
               .cp = 15, .opc1 = 4, .crn = 0, .crm = 0, .opc2 = 0,
               .access = PL2_RW, .accessfn = access_el3_aa32ns,
               .resetvalue = cpu->midr,
               .fieldoffset = offsetof(CPUARMState, cp15.vpidr_el2) },
-            { .name = "VPIDR_EL2", .state = ARM_CP_STATE_AA64,
+            { .name = "VPIDR_EL2", .state = ARM_CP_STATE_AA64,	/* DK: NOK for R52 */
               .opc0 = 3, .opc1 = 4, .crn = 0, .crm = 0, .opc2 = 0,
               .access = PL2_RW, .resetvalue = cpu->midr,
               .fieldoffset = offsetof(CPUARMState, cp15.vpidr_el2) },
-            { .name = "VMPIDR", .state = ARM_CP_STATE_AA32,
+            { .name = "VMPIDR", .state = ARM_CP_STATE_AA32,	/* DK: OK for R52 */
               .cp = 15, .opc1 = 4, .crn = 0, .crm = 0, .opc2 = 5,
               .access = PL2_RW, .accessfn = access_el3_aa32ns,
               .resetvalue = vmpidr_def,
               .fieldoffset = offsetof(CPUARMState, cp15.vmpidr_el2) },
-            { .name = "VMPIDR_EL2", .state = ARM_CP_STATE_AA64,
+            { .name = "VMPIDR_EL2", .state = ARM_CP_STATE_AA64,	/* DK: NOK for R52 */
               .opc0 = 3, .opc1 = 4, .crn = 0, .crm = 0, .opc2 = 5,
               .access = PL2_RW,
               .resetvalue = vmpidr_def,

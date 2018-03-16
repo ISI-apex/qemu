@@ -37,6 +37,7 @@
 
 #include "hw/fdt_generic_util.h"
 
+#define HPSC_R52
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
 {
     ARMCPU *cpu = ARM_CPU(cs);
@@ -1387,6 +1388,21 @@ static const ARMCPRegInfo cortexr5_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
+#ifdef HPSC_R52
+static const ARMCPRegInfo cortexr52_cp_reginfo[] = {
+    /* Dummy the TCM region regs for the moment */
+    { .name = "ATCM", .cp = 15, .opc1 = 0, .crn = 9, .crm = 1, .opc2 = 0,
+      .access = PL1_RW, .type = ARM_CP_CONST },
+    { .name = "BTCM", .cp = 15, .opc1 = 0, .crn = 9, .crm = 1, .opc2 = 1,
+      .access = PL1_RW, .type = ARM_CP_CONST },
+    { .name = "CTCM", .cp = 15, .opc1 = 0, .crn = 9, .crm = 1, .opc2 = 2,
+      .access = PL1_RW, .type = ARM_CP_CONST },
+    { .name = "DCACHE_INVAL", .cp = 15, .opc1 = 0, .crn = 15, .crm = 5,
+      .opc2 = 0, .access = PL1_W, .type = ARM_CP_NOP },
+    REGINFO_SENTINEL
+};
+#endif
+
 static void cortex_r4_initfn(Object *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
@@ -1447,6 +1463,41 @@ static void cortex_r5f_initfn(Object *obj)
     cortex_r5_initfn(obj);
     set_feature(&cpu->env, ARM_FEATURE_VFP3);
 }
+
+#ifdef HPSC_R52
+static void cortex_r52_initfn(Object *obj)
+{
+    ARMCPU *cpu = ARM_CPU(obj);
+
+    set_feature(&cpu->env, ARM_FEATURE_V8);
+    set_feature(&cpu->env, ARM_FEATURE_VFP3);
+    set_feature(&cpu->env, ARM_FEATURE_THUMB_DIV);
+    set_feature(&cpu->env, ARM_FEATURE_ARM_DIV);
+    set_feature(&cpu->env, ARM_FEATURE_NEON);
+    set_feature(&cpu->env, ARM_FEATURE_EL2);
+    set_feature(&cpu->env, ARM_FEATURE_PMSA);
+    set_feature(&cpu->env, ARM_FEATURE_MPIDR);
+    set_feature(&cpu->env, ARM_FEATURE_PMU);	/* DK added: R52 supports it, I'm not sure if Qemu supports that */
+    cpu->midr = 0x411FD130 ; /* r1p3 */
+    cpu->id_pfr0 = 0x00000131;
+    cpu->id_pfr1 = 0x10111001;
+    cpu->id_dfr0 = 0x03010006;
+    cpu->id_afr0 = 0x00000000;
+    cpu->id_mmfr0 = 0x00211040;
+    cpu->id_mmfr1 = 0x40000000;
+    cpu->id_mmfr2 = 0x01200000;
+    cpu->id_mmfr3 = 0xF0102211;
+    cpu->id_isar0 = 0x02101110;
+    cpu->id_isar1 = 0x13112111;
+    cpu->id_isar2 = 0x21232142;
+    cpu->id_isar3 = 0x01112131;
+    cpu->id_isar4 = 0x00010142;
+    cpu->id_isar5 = 0x00010001;
+    cpu->mp_is_up = true;
+    cpu->pmsav7_dregion = 32; /* DK: can be more than that because the region can be more flexible */
+    define_arm_cp_regs(cpu, cortexr52_cp_reginfo);
+}
+#endif
 
 static const ARMCPRegInfo cortexa8_cp_reginfo[] = {
     { .name = "L2LOCKDOWN", .cp = 15, .crn = 9, .crm = 0, .opc1 = 1, .opc2 = 0,
@@ -1891,6 +1942,9 @@ static const ARMCPUInfo arm_cpus[] = {
     { .name = "cortex-r4",   .initfn = cortex_r4_initfn },
     { .name = "cortex-r5",   .initfn = cortex_r5_initfn },
     { .name = "cortex-r5f",  .initfn = cortex_r5f_initfn },
+#ifdef HPSC_R52
+    { .name = "cortex-r52",   .initfn = cortex_r52_initfn },
+#endif
     { .name = "cortex-a7",   .initfn = cortex_a7_initfn },
     { .name = "cortex-a8",   .initfn = cortex_a8_initfn },
     { .name = "cortex-a9",   .initfn = cortex_a9_initfn },

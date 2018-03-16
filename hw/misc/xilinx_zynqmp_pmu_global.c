@@ -2181,7 +2181,6 @@ static void pmu_global_write(void *opaque, hwaddr addr, uint64_t value,
 {
     PMU_GLOBAL *s = XILINX_PMU_GLOBAL(opaque);
     DepRegisterInfo *r = &s->regs_info[addr / 4];
-
     if (!r->data) {
         qemu_log("%s: Decode error: write to %" HWADDR_PRIx "=%" PRIx64 "\n",
                  object_get_canonical_path(OBJECT(s)),

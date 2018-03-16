@@ -22,10 +22,22 @@ typedef struct ResetDevice {
     DeviceState parent;
 } ResetDevice;
 
+#define HPSC
+
 static void reset_handler(void *opaque, int irq, int level)
 {
     if (level) {
+#ifdef HPSC
+   	if (level == 1) { /* reset */
+           qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
+	} else if (level == 2) {
+           qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_RESET);
+        } else {
+           qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
+	}
+#else
         qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
+#endif
     }
 }
 

@@ -35,6 +35,8 @@
 
 #include "hw/fdt_generic_util.h"
 
+#define HPSC
+
 #ifndef XILINX_CRL_APB_ERR_DEBUG
 #define XILINX_CRL_APB_ERR_DEBUG 0
 #endif
@@ -491,7 +493,11 @@ DEP_REG32(BOOT_MODE_POR, 0x204)
     DEP_FIELD(BOOT_MODE_POR, BOOT_MODE1, 4, 4)
     DEP_FIELD(BOOT_MODE_POR, BOOT_MODE0, 4, 0)
 DEP_REG32(RESET_CTRL, 0x218)
+#ifdef HPSC
+    DEP_FIELD(RESET_CTRL, SRST_B, 2, 4)
+#else
     DEP_FIELD(RESET_CTRL, SOFT_RESET, 1, 4)
+#endif
     DEP_FIELD(RESET_CTRL, SRST_DIS, 1, 0)
 DEP_REG32(BLOCKONLY_RST, 0x21c)
     DEP_FIELD(BLOCKONLY_RST, DEBUG_ONLY, 1, 0)
@@ -873,12 +879,21 @@ static DepRegisterAccessInfo crl_apb_regs_info[] = {
         .rsvd = 0xf000,
         .ro = 0xfff,
     },{ .name = "RESET_CTRL",  .decode.addr = A_RESET_CTRL,
+#ifdef HPSC
         .reset = 0x40,
         .rsvd = 0xff8c,
         .gpios = (DepRegisterGPIOMapping[]) {
-            { .name = "SRST_B", .bit_pos = 4,   .width = 1 },
+            { .name = "SRST_B", .bit_pos = 4,   .width = 2 },	/* DK: when this bit is set, it triggers GPIO signal, It is connected to ps_reset device. */
             {},
         },
+#else
+        .reset = 0x40,
+        .rsvd = 0xff8c,
+        .gpios = (DepRegisterGPIOMapping[]) {
+            { .name = "SRST_B", .bit_pos = 4,   .width = 1 },	/* DK: when this bit is set, it triggers GPIO signal, It is connected to ps_reset device. */
+            {},
+        },
+#endif
     },{ .name = "BLOCKONLY_RST",  .decode.addr = A_BLOCKONLY_RST,
         .rsvd = 0x7dcc,
         .ro = 0x7dcc,
@@ -1043,7 +1058,11 @@ static const FDTGenericGPIOSet crl_gpios[] = {
         .names = &fdt_generic_gpio_name_set_gpio,
         .gpios = (FDTGenericGPIOConnection[]) {
             { .name = "RST_R5",     .fdt_index = 0,     .range = 2 },
+#ifdef HPSC
+            { .name = "SRST_B",     .fdt_index = 2, 	.range = 2},
+#else
             { .name = "SRST_B",     .fdt_index = 2  },
+#endif
             { },
         }
     },
