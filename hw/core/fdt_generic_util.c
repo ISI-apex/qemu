@@ -42,6 +42,12 @@
 #include "qom/cpu.h"
 #include "block/block.h"
 
+#define HPSC
+#ifdef HPSC
+#include "qom/object.h"
+#include <string.h>
+#endif
+
 #ifndef FDT_GENERIC_UTIL_ERR_DEBUG
 #define FDT_GENERIC_UTIL_ERR_DEBUG 3
 #endif
@@ -518,6 +524,7 @@ static void fdt_get_irq_info_from_intc(FDTMachineInfo *fdti, qemu_irq *ret,
         goto fail;
     }
 
+    /* DK: arm_gic_common_fdt_get_irq() */
     intc_fdt_class->get_irq(FDT_GENERIC_INTC(intc), ret, cells, num_cells,
                             max, errp);
 

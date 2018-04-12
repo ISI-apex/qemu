@@ -382,7 +382,7 @@ static void uart_write(void *opaque, hwaddr offset,
 {
     CadenceUARTState *s = opaque;
 
-    DB_PRINT(" offset:%x data:%08x\n", (unsigned)offset, (unsigned)value);
+    DB_PRINT(" offset:%x data:%08x, char:%c\n", (unsigned)offset, (unsigned)value, (char)value);
     offset >>= 2;
     if (offset >= CADENCE_UART_R_MAX) {
         return;

@@ -16,6 +16,8 @@
 
 #define TYPE_NVIC "armv7m_nvic"
 
+#define HPSC_DEF
+
 #define NVIC(obj) \
     OBJECT_CHECK(NVICState, (obj), TYPE_NVIC)
 
@@ -81,6 +83,9 @@ typedef struct NVICState {
     MemoryRegion container;
 
     uint32_t num_irq;
+#ifdef HPSC_DEF
+    uint32_t cpu_id;
+#endif
     qemu_irq excpout;
     qemu_irq sysresetreq;
 

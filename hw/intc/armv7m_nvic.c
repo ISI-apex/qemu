@@ -23,6 +23,11 @@
 #include "qemu/log.h"
 #include "trace.h"
 
+#define HPSC
+#ifdef HPSC
+#include "hw/fdt_generic_util.h"
+#endif
+
 /* IRQ number counting:
  *
  * the num-irq property counts the number of external IRQ lines
@@ -56,6 +61,13 @@
 #define NVIC_NOEXC_PRIO 0x100
 /* Maximum priority of non-secure exceptions when AIRCR.PRIS is set */
 #define NVIC_NS_PRIO_LIMIT 0x80
+
+#define DEBUG_NVIC 0
+#define DPRINTF(fmt, ...) {                                          \
+        if (DEBUG_NVIC) {                                           \
+            fprintf(stderr, "%s: " fmt, __func__, ## __VA_ARGS__);      \
+        }                                                               \
+    }
 
 static const uint8_t nvic_id[] = {
     0x00, 0xb0, 0x1b, 0x00, 0x0d, 0xe0, 0x05, 0xb1
@@ -683,9 +695,12 @@ static void set_irq_level(void *opaque, int n, int level)
     if (level != vec->level) {
         vec->level = level;
         if (level) {
+        DPRINTF("Set %d pending \n", n);
             armv7m_nvic_set_pending(s, n, false);
         }
     }
+    DPRINTF("IRQ[%d], vec(enabled(%u), pending(%u), active(%u), level(%u)\n",
+	n, vec->enabled, vec->pending, vec->active, vec->level);
 }
 
 static uint32_t nvic_readl(NVICState *s, uint32_t offset, MemTxAttrs attrs)
@@ -1926,6 +1941,9 @@ static const VMStateDescription vmstate_nvic = {
 static Property props_nvic[] = {
     /* Number of external IRQ lines (so excluding the 16 internal exceptions) */
     DEFINE_PROP_UINT32("num-irq", NVICState, num_irq, 64),
+#ifdef HPSC
+    DEFINE_PROP_UINT32("cpu-id", NVICState, cpu_id, 0),
+#endif
     DEFINE_PROP_END_OF_LIST()
 };
 
@@ -1992,7 +2010,6 @@ static void armv7m_nvic_reset(DeviceState *dev)
         }
     }
 }
-
 static void nvic_systick_trigger(void *opaque, int n, int level)
 {
     NVICState *s = opaque;
@@ -2008,6 +2025,17 @@ static void nvic_systick_trigger(void *opaque, int n, int level)
     }
 }
 
+static int arm_nvic_fdt_get_irq(FDTGenericIntc *obj, qemu_irq *irqs,
+                                      uint32_t *cells, int ncells, int max,
+                                      Error **errp)
+{
+    DPRINTF("cells[%u, %u, %u], ncells(%d), max(%d)\n", cells[0], cells[1], cells[2], ncells, max);
+    /* if interrupt-cells = 1, use cells[0],
+          interrupt-cells = 3, use cells[1] */
+    (*irqs) = qdev_get_gpio_in(DEVICE(obj), cells[1]);
+    return 1;
+}
+
 static void armv7m_nvic_realize(DeviceState *dev, Error **errp)
 {
     NVICState *s = NVIC(dev);
@@ -2015,7 +2043,17 @@ static void armv7m_nvic_realize(DeviceState *dev, Error **errp)
     Error *err = NULL;
     int regionlen;
 
+#ifdef HPSC
+    s->cpu = ARM_CPU(qemu_get_cpu(s->cpu_id));
+    CPUARMState *env = &s->cpu->env;
+    env->nvic = s;
+
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);      
+    sysbus_connect_irq(sbd, 0,               
+                       qdev_get_gpio_in(DEVICE(s->cpu), ARM_CPU_IRQ));        
+#else
     s->cpu = ARM_CPU(qemu_get_cpu(0));
+#endif
     assert(s->cpu);
 
     if (s->num_irq > NVIC_MAX_IRQ) {
@@ -2102,7 +2140,6 @@ static void armv7m_nvic_instance_init(Object *obj)
     qdev_init_gpio_out_named(dev, &nvic->sysresetreq, "SYSRESETREQ", 1);
     qdev_init_gpio_in_named(dev, nvic_systick_trigger, "systick-trigger", 1);
 }
-
 static void armv7m_nvic_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -2111,6 +2148,10 @@ static void armv7m_nvic_class_init(ObjectClass *klass, void *data)
     dc->props = props_nvic;
     dc->reset = armv7m_nvic_reset;
     dc->realize = armv7m_nvic_realize;
+
+    FDTGenericIntcClass *fgic = FDT_GENERIC_INTC_CLASS(klass);
+    fgic->get_irq = arm_nvic_fdt_get_irq;
+    fgic->auto_parent = NULL;
 }
 
 static const TypeInfo armv7m_nvic_info = {
@@ -2120,6 +2161,12 @@ static const TypeInfo armv7m_nvic_info = {
     .instance_size = sizeof(NVICState),
     .class_init    = armv7m_nvic_class_init,
     .class_size    = sizeof(SysBusDeviceClass),
+    .interfaces = (InterfaceInfo[]) {
+        { TYPE_FDT_GENERIC_INTC },
+        { TYPE_FDT_GENERIC_GPIO },
+        { }
+    },
+    .abstract = false,
 };
 
 static void armv7m_nvic_register_types(void)

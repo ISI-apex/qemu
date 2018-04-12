@@ -6,6 +6,7 @@
 #include "exec/memory.h"
 #include "qom/object.h"
 
+#define HPSC
 /* create a fdt_generic machine. the top level cpu irqs are required for
  * systems instantiating interrupt devices. The client is responsible for
  * destroying the returned FDTMachineInfo (using fdt_init_destroy_fdti)

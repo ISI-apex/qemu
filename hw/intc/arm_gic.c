@@ -1,5 +1,5 @@
 /*
- * ARM Generic/Distributed Interrupt Controller
+ ARM Generic/Distributed Interrupt Controller
  *
  * Copyright (c) 2006-2007 CodeSourcery.
  * Written by Paul Brook
@@ -31,7 +31,6 @@
 
 #include "hw/guest/linux.h"
 
-/* #define DEBUG_GIC */
 
 #define HPSC
 #ifdef DEBUG_GIC

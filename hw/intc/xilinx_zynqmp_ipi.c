@@ -60,6 +60,9 @@ DEP_REG32(IPI_TRIG, 0x0)
     DEP_FIELD(IPI_TRIG, PMU_2, 1, 18)
     DEP_FIELD(IPI_TRIG, PMU_1, 1, 17)
     DEP_FIELD(IPI_TRIG, PMU_0, 1, 16)
+#ifdef HPSC
+    DEP_FIELD(IPI_TRIG, TRCH_0, 1, 10)
+#endif
     DEP_FIELD(IPI_TRIG, RPU_1, 1, 9)
     DEP_FIELD(IPI_TRIG, RPU_0, 1, 8)
     DEP_FIELD(IPI_TRIG, APU, 1, 0)
@@ -72,6 +75,9 @@ DEP_REG32(IPI_OBS, 0x4)
     DEP_FIELD(IPI_OBS, PMU_2, 1, 18)
     DEP_FIELD(IPI_OBS, PMU_1, 1, 17)
     DEP_FIELD(IPI_OBS, PMU_0, 1, 16)
+#ifdef HPSC
+    DEP_FIELD(IPI_OBS, TRCH_0, 1, 10)
+#endif
     DEP_FIELD(IPI_OBS, RPU_1, 1, 9)
     DEP_FIELD(IPI_OBS, RPU_0, 1, 8)
     DEP_FIELD(IPI_OBS, APU, 1, 0)
@@ -84,6 +90,9 @@ DEP_REG32(IPI_ISR, 0x10)
     DEP_FIELD(IPI_ISR, PMU_2, 1, 18)
     DEP_FIELD(IPI_ISR, PMU_1, 1, 17)
     DEP_FIELD(IPI_ISR, PMU_0, 1, 16)
+#ifdef HPSC
+    DEP_FIELD(IPI_ISR, TRCH_0, 1, 10)
+#endif
     DEP_FIELD(IPI_ISR, RPU_1, 1, 9)
     DEP_FIELD(IPI_ISR, RPU_0, 1, 8)
     DEP_FIELD(IPI_ISR, APU, 1, 0)
@@ -96,6 +105,9 @@ DEP_REG32(IPI_IMR, 0x14)
     DEP_FIELD(IPI_IMR, PMU_2, 1, 18)
     DEP_FIELD(IPI_IMR, PMU_1, 1, 17)
     DEP_FIELD(IPI_IMR, PMU_0, 1, 16)
+#ifdef HPSC
+    DEP_FIELD(IPI_IMR, TRCH_0, 1, 10)
+#endif
     DEP_FIELD(IPI_IMR, RPU_1, 1, 9)
     DEP_FIELD(IPI_IMR, RPU_0, 1, 8)
     DEP_FIELD(IPI_IMR, APU, 1, 0)
@@ -108,6 +120,9 @@ DEP_REG32(IPI_IER, 0x18)
     DEP_FIELD(IPI_IER, PMU_2, 1, 18)
     DEP_FIELD(IPI_IER, PMU_1, 1, 17)
     DEP_FIELD(IPI_IER, PMU_0, 1, 16)
+#ifdef HPSC
+    DEP_FIELD(IPI_IER, TRCH_0, 1, 10)
+#endif
     DEP_FIELD(IPI_IER, RPU_1, 1, 9)
     DEP_FIELD(IPI_IER, RPU_0, 1, 8)
     DEP_FIELD(IPI_IER, APU, 1, 0)
@@ -120,6 +135,9 @@ DEP_REG32(IPI_IDR, 0x1c)
     DEP_FIELD(IPI_IDR, PMU_2, 1, 18)
     DEP_FIELD(IPI_IDR, PMU_1, 1, 17)
     DEP_FIELD(IPI_IDR, PMU_0, 1, 16)
+#ifdef HPSC
+    DEP_FIELD(IPI_IDR, TRCH_0, 1, 10)
+#endif
     DEP_FIELD(IPI_IDR, RPU_1, 1, 9)
     DEP_FIELD(IPI_IDR, RPU_0, 1, 8)
     DEP_FIELD(IPI_IDR, APU, 1, 0)
@@ -189,8 +207,8 @@ static void ipi_trig_postw(DepRegisterInfo *reg, uint64_t val64) {
 static DepRegisterAccessInfo ipi_regs_info[] = {
     {   .name = "IPI_TRIG",  .decode.addr = A_IPI_TRIG,
 #ifdef HPSC
-        .rsvd = 0xf0f0fcee,
-        .ro = 0xf0f0fcee,
+        .rsvd = 0xf0f0f8ee,
+        .ro = 0xf0f0f8ee,
 #else
         .rsvd = 0xf0f0fcfe,
         .ro = 0xf0f0fcfe,
@@ -200,6 +218,9 @@ static DepRegisterAccessInfo ipi_regs_info[] = {
             GPIO_TRIG_OUT(APU),
             GPIO_TRIG_OUT(RPU_0),
             GPIO_TRIG_OUT(RPU_1),
+#ifdef HPSC
+            GPIO_TRIG_OUT(TRCH_0),
+#endif
             GPIO_TRIG_OUT(PMU_0),
             GPIO_TRIG_OUT(PMU_1),
             GPIO_TRIG_OUT(PMU_2),
@@ -212,7 +233,7 @@ static DepRegisterAccessInfo ipi_regs_info[] = {
         }
     },{ .name = "IPI_OBS",  .decode.addr = A_IPI_OBS,
 #ifdef HPSC
-        .rsvd = 0xf0f0fcee,
+        .rsvd = 0xf0f0f8ee,
         .ro = 0xffffffff,
 #else
         .rsvd = 0xf0f0fcfe,
@@ -220,9 +241,9 @@ static DepRegisterAccessInfo ipi_regs_info[] = {
 #endif
     },{ .name = "IPI_ISR",  .decode.addr = A_IPI_ISR,
 #ifdef HPSC
-        .rsvd = 0xf0f0fcee,
-        .ro = 0xf0f0fcee,
-        .w1c = 0xf0f0311,
+        .rsvd = 0xf0f0f8ee,
+        .ro = 0xf0f0f8ee,
+        .w1c = 0xf0f0711,
 #else
         .rsvd = 0xf0f0fcfe,
         .ro = 0xf0f0fcfe,
@@ -233,6 +254,9 @@ static DepRegisterAccessInfo ipi_regs_info[] = {
             GPIO_OBS_OUT(APU),
             GPIO_OBS_OUT(RPU_0),
             GPIO_OBS_OUT(RPU_1),
+#ifdef HPSC
+            GPIO_OBS_OUT(TRCH_0),
+#endif
             GPIO_OBS_OUT(PMU_0),
             GPIO_OBS_OUT(PMU_1),
             GPIO_OBS_OUT(PMU_2),
@@ -245,30 +269,30 @@ static DepRegisterAccessInfo ipi_regs_info[] = {
         }
     },{ .name = "IPI_IMR",  .decode.addr = A_IPI_IMR,
 #ifdef HPSC
-        .reset = 0xf0f0311,
-        .rsvd = 0xf0f0fcee,
-        .ro = 0xffffffff,
+        .reset =  0xf0f0711,
+        .rsvd =  0xf0f0f8ee,
+        .ro =    0xffffffff,
 #else
-        .reset = 0xf0f0301,
-        .rsvd = 0xf0f0fcfe,
-        .ro = 0xffffffff,
+        .reset =  0xf0f0301,
+        .rsvd =  0xf0f0fcfe,
+        .ro =    0xffffffff,
 #endif
     },{ .name = "IPI_IER",  .decode.addr = A_IPI_IER,
 #ifdef HPSC
-        .rsvd = 0xf0f0fcee,
-        .ro = 0xf0f0fcee,
+        .rsvd = 0xf0f0f8ee,
+        .ro =   0xf0f0f8ee,
 #else
         .rsvd = 0xf0f0fcfe,
-        .ro = 0xf0f0fcfe,
+        .ro =   0xf0f0fcfe,
 #endif
         .pre_write = ipi_ier_prew,
     },{ .name = "IPI_IDR",  .decode.addr = A_IPI_IDR,
 #ifdef HPSC
-        .rsvd = 0xf0f0fcee,
-        .ro = 0xf0f0fcee,
+        .rsvd = 0xf0f0f8ee,
+        .ro =   0xf0f0f8ee,
 #else
         .rsvd = 0xf0f0fcfe,
-        .ro = 0xf0f0fcfe,
+        .ro =   0xf0f0fcfe,
 #endif
         .pre_write = ipi_idr_prew,
     }
@@ -433,6 +457,17 @@ static const FDTGenericGPIOSet ipi_client_gpios[] = {
             GPIO_FDT_TRIG_OUT(APU, 0),
             GPIO_FDT_TRIG_OUT(RPU_0, 1),
             GPIO_FDT_TRIG_OUT(RPU_1, 2),
+#ifdef HPSC
+            GPIO_FDT_TRIG_OUT(TRCH_0, 3),
+            GPIO_FDT_TRIG_OUT(PMU_0, 4),
+            GPIO_FDT_TRIG_OUT(PMU_1, 5),
+            GPIO_FDT_TRIG_OUT(PMU_2, 6),
+            GPIO_FDT_TRIG_OUT(PMU_3, 7),
+            GPIO_FDT_TRIG_OUT(PL_0, 8),
+            GPIO_FDT_TRIG_OUT(PL_1, 9),
+            GPIO_FDT_TRIG_OUT(PL_2, 10),
+            GPIO_FDT_TRIG_OUT(PL_3, 11),
+#else
             GPIO_FDT_TRIG_OUT(PMU_0, 3),
             GPIO_FDT_TRIG_OUT(PMU_1, 4),
             GPIO_FDT_TRIG_OUT(PMU_2, 5),
@@ -441,6 +476,7 @@ static const FDTGenericGPIOSet ipi_client_gpios[] = {
             GPIO_FDT_TRIG_OUT(PL_1, 8),
             GPIO_FDT_TRIG_OUT(PL_2, 9),
             GPIO_FDT_TRIG_OUT(PL_3, 10),
+#endif
         }
     },
     {
@@ -449,6 +485,17 @@ static const FDTGenericGPIOSet ipi_client_gpios[] = {
             GPIO_FDT_OBS_OUT(APU, 0),
             GPIO_FDT_OBS_OUT(RPU_0, 1),
             GPIO_FDT_OBS_OUT(RPU_1, 2),
+#ifdef HPSC
+            GPIO_FDT_OBS_OUT(TRCH_0, 2),
+            GPIO_FDT_OBS_OUT(PMU_0, 4),
+            GPIO_FDT_OBS_OUT(PMU_1, 5),
+            GPIO_FDT_OBS_OUT(PMU_2, 6),
+            GPIO_FDT_OBS_OUT(PMU_3, 7),
+            GPIO_FDT_OBS_OUT(PL_0, 8),
+            GPIO_FDT_OBS_OUT(PL_1, 9),
+            GPIO_FDT_OBS_OUT(PL_2, 10),
+            GPIO_FDT_OBS_OUT(PL_3, 11),
+#else
             GPIO_FDT_OBS_OUT(PMU_0, 3),
             GPIO_FDT_OBS_OUT(PMU_1, 4),
             GPIO_FDT_OBS_OUT(PMU_2, 5),
@@ -457,6 +504,7 @@ static const FDTGenericGPIOSet ipi_client_gpios[] = {
             GPIO_FDT_OBS_OUT(PL_1, 8),
             GPIO_FDT_OBS_OUT(PL_2, 9),
             GPIO_FDT_OBS_OUT(PL_3, 10),
+#endif
         }
     },
     { },
