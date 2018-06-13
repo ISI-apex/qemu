@@ -24,6 +24,7 @@
 #include "hw/fdt_generic_util.h"
 #include "qom/cpu.h"
 
+#define HPSC_NEW_GIC
 static bool irqbetter(GICv3CPUState *cs, int irq, uint8_t prio)
 {
     /* Return true if this IRQ at this priority should take
@@ -385,9 +386,15 @@ static const FDTGenericGPIOSet arm_gicv3_client_gpios[] = {
     {
         .names = &fdt_generic_gpio_name_set_interrupts,
         .gpios = (FDTGenericGPIOConnection []) {
+#ifdef HPSC_NEW_GIC
+            { .name = "irq",    .range = 16 },
+            { .name = "fiq",    .range = 16, .fdt_index = 16 },
+            { .name = "maint",  .range = 8, .fdt_index = 32 },
+#else
             { .name = "irq",    .range = 8 },
             { .name = "fiq",    .range = 8, .fdt_index = 8 },
             { .name = "maint",  .range = 4, .fdt_index = 16 },
+#endif
             { },
         },
     },
