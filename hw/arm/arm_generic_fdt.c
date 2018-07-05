@@ -171,8 +171,10 @@ static int zynq7000_mdio_phy_create(char *node_path, FDTMachineInfo *fdti,
 
 static char *zynq7000_qspi_flash_node_clone(void *fdt)
 {
+#define QSPI_DUMMY_PATH "/ps7-qspi-dummy@0"
+
     char qspi_node_path[DT_PATH_LENGTH];
-    char qspi_new_node_path[DT_PATH_LENGTH];
+    char qspi_new_node_path[DT_PATH_LENGTH + sizeof(QSPI_DUMMY_PATH)];
     char *qspi_clone_name = NULL;
     uint32_t val[2];
 
@@ -193,7 +195,7 @@ static char *zynq7000_qspi_flash_node_clone(void *fdt)
                     "#bus-cells", val, 4);
 
         /* Generate dummy name */
-        snprintf(qspi_new_node_path, DT_PATH_LENGTH, "%s/ps7-qspi-dummy@0",
+        snprintf(qspi_new_node_path, sizeof(qspi_new_node_path), "%s" QSPI_DUMMY_PATH,
                  qspi_node_path);
 
         /* get the spi flash node to clone from (assume first child node) */
@@ -231,6 +233,8 @@ static char *zynq7000_qspi_flash_node_clone(void *fdt)
     }
 
     return qspi_clone_name;
+
+#undef QSPI_DUMMY_PATH
 }
 
 static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
