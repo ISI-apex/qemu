@@ -2072,6 +2072,8 @@ static int arm_nvic_fdt_get_irq(FDTGenericIntc *obj, qemu_irq *irqs,
     return 1;
 }
 
+MemoryRegion *nvic_region = NULL;
+
 static void armv7m_nvic_realize(DeviceState *dev, Error **errp)
 {
     NVICState *s = NVIC(dev);
@@ -2137,6 +2139,8 @@ static void armv7m_nvic_realize(DeviceState *dev, Error **errp)
      */
     regionlen = arm_feature(&s->cpu->env, ARM_FEATURE_V8) ? 0x21000 : 0x1000;
     memory_region_init(&s->container, OBJECT(s), "nvic", regionlen);
+
+    nvic_region = &s->container;
     /* The system register region goes at the bottom of the priority
      * stack as it covers the whole page.
      */
