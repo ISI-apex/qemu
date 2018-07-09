@@ -64,11 +64,12 @@ class MtreeCommand(gdb.Command):
             klass = ' (I/O)'
         elif bool(ptr['ram']):
             klass = ' (RAM)'
-        gdb.write('%s%016x-%016x %s%s (@ %s)\n'
+        gdb.write('%s%016x-%016x %s(0x%x)%s (@ %s)\n'
                   % ('  ' * level,
                      int(addr),
                      int(addr + (size - 1)),
                      ptr['name'].string(),
+                     int(ptr),
                      klass,
                      ptr,
                      ),

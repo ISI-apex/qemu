@@ -3202,11 +3202,12 @@ static void mtree_print_mr(fprintf_function mon_printf, void *f,
                    mr->enabled ? "" : " [disabled]");
     } else {
         mon_printf(f,
-                   TARGET_FMT_plx "-" TARGET_FMT_plx " (prio %d, %s): %s%s\n",
+                   TARGET_FMT_plx "-" TARGET_FMT_plx " (prio %d, %s): %s (%p) %s\n",
                    cur_start, cur_end,
                    mr->priority,
                    memory_region_type((MemoryRegion *)mr),
                    memory_region_name(mr),
+                   mr,
                    mr->enabled ? "" : " [disabled]");
     }
 
