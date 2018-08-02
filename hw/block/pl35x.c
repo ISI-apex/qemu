@@ -34,6 +34,13 @@
 #include "qemu/host-utils.h"
 #include "hw/sysbus.h"
 
+#define HPSC 
+#ifdef HPSC
+#include "hw/register-dep.h"
+#include "sysemu/blockdev.h"
+#endif
+
+//#define PL35X_ERR_DEBUG
 #ifdef PL35X_ERR_DEBUG
 #define DB_PRINT(...) do { \
     fprintf(stderr,  ": %s: ", __func__); \
@@ -70,13 +77,19 @@ typedef struct PL35xState {
     uint8_t x; /* the "x" in pl35x */
 } PL35xState;
 
+static int first = 1;
 static uint64_t pl35x_read(void *opaque, hwaddr addr,
                          unsigned int size)
 {
     PL35xState *s = opaque;
     uint32_t r = 0;
     int rdy;
-
+#ifdef HPSC
+    if (first) {
+    memory_region_add_subregion(s->mmio.container, 0x600000000, &s->itf[1].mm);
+    first = 0;
+    }
+#endif
     addr >>= 2;
     switch (addr) {
     case 0x0:
@@ -91,6 +104,12 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
             r |= (!!rdy) << 6;
         }
         break;
+    case 0x418>>2:
+    case 0x41C>>2:
+    case 0x420>>2:
+    case 0x424>>2:
+	    r = 0x4fffffff;	/* DK: always ECC is valid */
+	    break;
     default:
         DB_PRINT("Unimplemented SMC read access reg=" TARGET_FMT_plx "\n",
                  addr * 4);
@@ -134,7 +153,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         r |= r8 << shift;
         shift += 8;
     }
-    DB_PRINT("addr=%x r=%x size=%d\n", (unsigned)addr, r, size);
+    DB_PRINT("addr=0x%x r=0x%x size=%d\n", (unsigned)addr, r, size);
     return r;
 }
 
@@ -232,12 +251,31 @@ static void pl35x_init_sram(SysBusDevice *dev, PL35xItf *itf)
 
 static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
 {
+#ifdef HPSC
+//    DriveInfo *dinfo = drive_get_next(IF_MTD); 
+    DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
     /* d Must be a NAND flash */
+    if (dinfo) {
+#ifdef HPSC
+        itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
+                               NAND_MFR_MICRON, 0xaa);	/* from drivers/mtd/nand/nand_ids.c, MiB */
+//                               NAND_MFR_MICRON, 0xda);	/* from drivers/mtd/nand/nand_ids.c, MiB */
+//                               NAND_MFR_MICRON, 0xA2);	/* from drivers/mtd/nand/nand_ids.c, 512MiB */
+#else
+        itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
+                               NAND_MFR_MICRON, 0x44);
+#endif
+    }
+#endif
     assert(object_dynamic_cast(OBJECT(itf->dev), "nand"));
 
     memory_region_init_io(&itf->mm, OBJECT(dev), &nand_ops, itf, "pl35x.nand",
                           1 << 24);
     sysbus_init_mmio(dev, &itf->mm);
+#ifdef HPSC__
+    PL35xState *s = PL35X(dev);
+    memory_region_add_subregion(&s->mmio, 0x1000, &itf->mm);
+#endif
 }
 
 static int pl35x_init(SysBusDevice *dev)

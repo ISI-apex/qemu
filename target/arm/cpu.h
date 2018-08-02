@@ -20,6 +20,8 @@
 #ifndef ARM_CPU_H
 #define ARM_CPU_H
 
+#define HPSC
+
 #include "kvm-consts.h"
 #include "hw/registerfields.h"
 
@@ -427,6 +429,14 @@ typedef struct CPUARMState {
         uint64_t pmccfiltr_el0; /* Performance Monitor Filter Register */
         uint64_t vpidr_el2; /* Virtualization Processor ID Register */
         uint64_t vmpidr_el2; /* Virtualization Multiprocessor ID Register */
+
+#ifdef HPSC
+        uint32_t prselr;
+        uint64_t prbar;
+        uint64_t prlar;
+        uint64_t prbar_n[16];
+        uint64_t prlar_n[16];
+#endif
     } cp15;
 
     struct {
@@ -584,6 +594,23 @@ typedef struct CPUARMState {
         uint32_t mair1[M_REG_NUM_BANKS];
     } pmsav8;
 
+    /* PMSAv8 MPU */
+    struct {
+        /* The PMSAv8 implementation also shares some PMSAv7 config
+         * and state:
+         *  pmsav7.rnr (region number register)
+         *  pmsav7_dregion (number of configured regions)
+         */
+        uint32_t prbar[16];
+        uint32_t prlar[16];
+        uint32_t hprbar[16];
+        uint32_t hprlar[16];
+        uint32_t mair0[2];	/* mair0, hmair0 */
+        uint32_t mair1[2];	/* mair1, hmair1 */
+        uint32_t amair0[2];	/* amair1, ahmair1 */
+        uint32_t amair1[2];	/* amair1, ahmair1 */
+    } pmsav8r;
+
     /* v8M SAU */
     struct {
         uint32_t *rbar;
@@ -592,6 +619,11 @@ typedef struct CPUARMState {
         uint32_t ctrl;
     } sau;
 
+#ifdef HPSC__
+    struct {
+        uint32_t tcmregion[3];
+    } v8r;
+#endif
     void *nvic;
     const struct arm_boot_info *boot_info;
     /* Store GICv3CPUState to access from this struct */
@@ -808,6 +840,9 @@ struct ARMCPU {
 
     /* Used to synchronize KVM and QEMU in-kernel device levels */
     uint8_t device_irq_level;
+#ifdef HPSC
+    uint32_t tcmregion[3];
+#endif
 };
 
 static inline ARMCPU *arm_env_get_cpu(CPUARMState *env)
@@ -1381,6 +1416,9 @@ enum arm_features {
     ARM_FEATURE_VBAR, /* has cp15 VBAR */
     ARM_FEATURE_M_SECURITY, /* M profile Security Extension */
     ARM_FEATURE_JAZELLE, /* has (trivial) Jazelle implementation */
+#ifdef HPSC
+    ARM_FEATURE_V8R,
+#endif
 };
 
 static inline int arm_feature(CPUARMState *env, int feature)

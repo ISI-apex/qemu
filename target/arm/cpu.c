@@ -197,6 +197,15 @@ static void arm_cpu_reset(CPUState *s)
         /* Userspace expects access to cp10 and cp11 for FP/Neon */
         env->cp15.cpacr_el1 = deposit64(env->cp15.cpacr_el1, 20, 4, 0xf);
 #endif
+#ifdef HPSC
+    if (arm_feature(env, ARM_FEATURE_V8R)) {
+        cpu->env.regs[15] = cpu->rvbar;
+        env->pc = cpu->rvbar;
+    }
+    if (arm_feature(env, ARM_FEATURE_EL2)) {
+            env->pstate = PSTATE_MODE_EL2h;	/* DK 0x9 */
+    }
+#endif
     }
 
 #if defined(CONFIG_USER_ONLY)
@@ -210,7 +219,12 @@ static void arm_cpu_reset(CPUState *s)
     }
 #else
     /* SVC mode with interrupts disabled.  */
-    env->uncached_cpsr = ARM_CPU_MODE_SVC;
+    env->uncached_cpsr = ARM_CPU_MODE_SVC;	/* DK 0x13 */
+#ifdef HPSC
+    if (arm_feature(env, ARM_FEATURE_EL2))
+      env->uncached_cpsr = ARM_CPU_MODE_HYP;	/* 2, DK 0x1a */
+//      env->uncached_cpsr = ARM_CPU_MODE_MON;	/* 3, DK 0x1a */
+#endif
     env->daif = PSTATE_D | PSTATE_A | PSTATE_I | PSTATE_F;
 
     if (arm_feature(env, ARM_FEATURE_M)) {
@@ -286,7 +300,11 @@ static void arm_cpu_reset(CPUState *s)
 
     if (arm_feature(env, ARM_FEATURE_PMSA)) {
         if (cpu->pmsav7_dregion > 0) {
+#ifdef HPSC
+            if (arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R)) {
+#else
             if (arm_feature(env, ARM_FEATURE_V8)) {
+#endif
                 memset(env->pmsav8.rbar[M_REG_NS], 0,
                        sizeof(*env->pmsav8.rbar[M_REG_NS])
                        * cpu->pmsav7_dregion);
@@ -343,6 +361,10 @@ static void arm_cpu_reset(CPUState *s)
     }
 
     if (!runstate_is_running()) {
+#ifdef HPSC
+        if (arm_feature(env, ARM_FEATURE_V8R) || arm_feature(env, ARM_FEATURE_AARCH64))
+          old_pc = env->pc;
+#endif
         cc->set_pc(s, old_pc);
     }
 #endif
@@ -745,6 +767,20 @@ static Property arm_cpu_reset_cbar_property =
 static Property arm_cpu_reset_hivecs_property =
             DEFINE_PROP_BOOL("reset-hivecs", ARMCPU, reset_hivecs, false);
 
+#ifdef HPSC__
+static void arm_cpu_set_rvbar(Object *obj, Visitor *v,
+                              const char *name, void *opaque,
+                              Error **errp)
+{
+    ARMCPU *cpu = ARM_CPU(obj);
+    Error *local_err = NULL;
+
+    visit_type_uint64(v, name, &cpu->rvbar, &local_err);
+    if (local_err) {
+        error_propagate(errp, local_err);
+    }
+}
+
 static void arm_cpu_get_rvbar(Object *obj, Visitor *v,
                               const char *name, void *opaque,
                               Error **errp)
@@ -771,6 +807,7 @@ static void arm_cpu_set_rvbar(Object *obj, Visitor *v,
     }
 }
 
+#endif
 static Property arm_cpu_has_el2_property =
             DEFINE_PROP_BOOL("has_el2", ARMCPU, has_el2, true);
 
@@ -820,12 +857,21 @@ static void arm_cpu_post_init(Object *obj)
                                  &error_abort);
     }
 
+#ifdef HPSC__
     if (arm_feature(&cpu->env, ARM_FEATURE_AARCH64)) {
         object_property_add(obj, "rvbar", "uint64",
                             arm_cpu_get_rvbar,
                             arm_cpu_set_rvbar,
                             NULL, NULL, &error_abort);
     }
+
+    if (arm_feature(&cpu->env, ARM_FEATURE_V8R)) {
+        object_property_add(obj, "rvbar", "uint64",
+                            arm_cpu_get_rvbar,
+                            arm_cpu_set_rvbar,
+                            NULL, NULL, &error_abort);
+    }
+#endif
 
     if (arm_feature(&cpu->env, ARM_FEATURE_EL3)) {
         /* Add the has_el3 state CPU property only if EL3 is allowed.  This will
@@ -899,7 +945,11 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
     }
 
     /* Some features automatically imply others: */
+#ifdef HPSC
+    if (arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R)) {
+#else
     if (arm_feature(env, ARM_FEATURE_V8)) {
+#endif
         set_feature(env, ARM_FEATURE_V7);
         set_feature(env, ARM_FEATURE_ARM_DIV);
         set_feature(env, ARM_FEATURE_LPAE);
@@ -1054,7 +1104,11 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
         }
 
         if (nr) {
+#ifdef HPSC
+            if (arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R)) {
+#else
             if (arm_feature(env, ARM_FEATURE_V8)) {
+#endif
                 /* PMSAv8 */
                 env->pmsav8.rbar[M_REG_NS] = g_new0(uint32_t, nr);
                 env->pmsav8.rlar[M_REG_NS] = g_new0(uint32_t, nr);
@@ -1388,7 +1442,7 @@ static const ARMCPRegInfo cortexr5_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
-#ifdef HPSC_R52
+#ifdef HPSC_R52__
 static const ARMCPRegInfo cortexr52_cp_reginfo[] = {
     /* Dummy the TCM region regs for the moment */
     { .name = "ATCM", .cp = 15, .opc1 = 0, .crn = 9, .crm = 1, .opc2 = 0,
@@ -1469,7 +1523,7 @@ static void cortex_r52_initfn(Object *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
-    set_feature(&cpu->env, ARM_FEATURE_V8);
+    set_feature(&cpu->env, ARM_FEATURE_V8R);
     set_feature(&cpu->env, ARM_FEATURE_VFP3);
     set_feature(&cpu->env, ARM_FEATURE_THUMB_DIV);
     set_feature(&cpu->env, ARM_FEATURE_ARM_DIV);
@@ -1478,7 +1532,12 @@ static void cortex_r52_initfn(Object *obj)
     set_feature(&cpu->env, ARM_FEATURE_PMSA);
     set_feature(&cpu->env, ARM_FEATURE_MPIDR);
     set_feature(&cpu->env, ARM_FEATURE_PMU);	/* DK added: R52 supports it, I'm not sure if Qemu supports that */
-    cpu->midr = 0x411FD130 ; /* r1p3 */
+    cpu->midr = 0x410FD130 ; /* r1p3 */
+    cpu->revidr = 0x00000000;
+    cpu->mvfr0 = 0x10110222;
+    cpu->mvfr1 = 0x12111111;
+    cpu->mvfr2 = 0x00000043;
+    cpu->ctr = 0x8144c004;
     cpu->id_pfr0 = 0x00000131;
     cpu->id_pfr1 = 0x10111001;
     cpu->id_dfr0 = 0x03010006;
@@ -1494,8 +1553,9 @@ static void cortex_r52_initfn(Object *obj)
     cpu->id_isar4 = 0x00010142;
     cpu->id_isar5 = 0x00010001;
     cpu->mp_is_up = true;
-    cpu->pmsav7_dregion = 32; /* DK: can be more than that because the region can be more flexible */
-    define_arm_cp_regs(cpu, cortexr52_cp_reginfo);
+    cpu->pmsav7_dregion = 16; /* DK: can be more than that because the region can be more flexible */
+    cpu->reset_sctlr = 0x30c50838;
+//    define_arm_cp_regs(cpu, cortexr52_cp_reginfo);
 }
 #endif
 
@@ -1986,6 +2046,12 @@ static Property arm_cpu_properties[] = {
                         mp_affinity, ARM64_AFFINITY_INVALID),
     DEFINE_PROP_INT32("node-id", ARMCPU, node_id, CPU_UNSET_NUMA_NODE_ID),
     DEFINE_PROP_INT32("core-count", ARMCPU, core_count, -1),
+#ifdef HPSC
+    DEFINE_PROP_UINT64("rvbar", ARMCPU, rvbar, 0),
+    DEFINE_PROP_UINT32("atcmregionr", ARMCPU, tcmregion[0], 0),
+    DEFINE_PROP_UINT32("btcmregionr", ARMCPU, tcmregion[1], 0),
+    DEFINE_PROP_UINT32("ctcmregionr", ARMCPU, tcmregion[2], 0),
+#endif
     DEFINE_PROP_END_OF_LIST()
 };
 

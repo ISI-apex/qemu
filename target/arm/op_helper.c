@@ -685,9 +685,17 @@ static void msr_mrs_banked_exc_checks(CPUARMState *env, uint32_t tgtmode,
      */
     int curmode = env->uncached_cpsr & CPSR_M;
 
+#ifdef HPSC /* test */
+    if (!arm_feature(env, ARM_FEATURE_V8R)) {
+      if (curmode == tgtmode) {
+        goto undef;
+      }
+    }
+#else
     if (curmode == tgtmode) {
         goto undef;
     }
+#endif
 
     if (tgtmode == ARM_CPU_MODE_USR) {
         switch (regno) {
@@ -713,6 +721,13 @@ static void msr_mrs_banked_exc_checks(CPUARMState *env, uint32_t tgtmode,
 
     if (tgtmode == ARM_CPU_MODE_HYP) {
         switch (regno) {
+#ifdef HPSC
+        case 16: /* SPSR_Hyp */
+            if (curmode != ARM_CPU_MODE_HYP && curmode != ARM_CPU_MODE_MON) {
+                goto undef;
+            }
+            break;
+#endif
         case 17: /* ELR_Hyp */
             if (curmode != ARM_CPU_MODE_HYP && curmode != ARM_CPU_MODE_MON) {
                 goto undef;
@@ -1137,9 +1152,21 @@ void HELPER(exception_return)(CPUARMState *env)
         } else {
             env->regs[15] = env->elr_el[cur_el] & ~0x3;
         }
+#ifdef HPSC
+        if (env->aarch64 == 1) {
         qemu_log_mask(CPU_LOG_INT, "Exception return from AArch64 EL%d to "
                       "AArch32 EL%d PC 0x%" PRIx32 "\n",
                       cur_el, new_el, env->regs[15]);
+        } else {
+        qemu_log_mask(CPU_LOG_INT, "Exception return from AArch32 EL%d to "
+                      "AArch32 EL%d PC 0x%" PRIx32 "\n",
+                      cur_el, new_el, env->regs[15]);
+        }
+#else
+        qemu_log_mask(CPU_LOG_INT, "Exception return from AArch64 EL%d to "
+                      "AArch32 EL%d PC 0x%" PRIx32 "\n",
+                      cur_el, new_el, env->regs[15]);
+#endif
     } else {
         env->aarch64 = 1;
         pstate_write(env, spsr);

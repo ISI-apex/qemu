@@ -3236,9 +3236,15 @@ static int disas_vfp_v8_insn(DisasContext *s, uint32_t insn)
 {
     uint32_t rd, rn, rm, dp = extract32(insn, 8, 1);
 
+#ifdef HPSC
+    if (!(arm_dc_feature(s, ARM_FEATURE_V8) || arm_dc_feature(s, ARM_FEATURE_V8R))) {
+        return 1;
+    }
+#else
     if (!arm_dc_feature(s, ARM_FEATURE_V8)) {
         return 1;
     }
+#endif
 
     if (dp) {
         VFP_DREG_D(rd, insn);
@@ -3448,9 +3454,15 @@ static int disas_vfp_insn(DisasContext *s, uint32_t insn)
                             }
                             break;
                         case ARM_VFP_MVFR2:
+#ifdef HPSC
+                            if (!(arm_dc_feature(s, ARM_FEATURE_V8) || arm_dc_feature(s, ARM_FEATURE_V8R))) {
+                                return 1;
+                            }
+#else
                             if (!arm_dc_feature(s, ARM_FEATURE_V8)) {
                                 return 1;
                             }
+#endif
                             /* fall through */
                         case ARM_VFP_MVFR0:
                         case ARM_VFP_MVFR1:
@@ -3638,8 +3650,13 @@ static int disas_vfp_insn(DisasContext *s, uint32_t insn)
                      * UNPREDICTABLE if bit 8 is set prior to ARMv8
                      * (we choose to UNDEF)
                      */
+#ifdef HPSC
+                    if ((dp && !arm_dc_feature(s, ARM_FEATURE_V8) && !arm_dc_feature(s, ARM_FEATURE_V8R)) ||
+                        !arm_dc_feature(s, ARM_FEATURE_VFP_FP16)) {
+#else
                     if ((dp && !arm_dc_feature(s, ARM_FEATURE_V8)) ||
                         !arm_dc_feature(s, ARM_FEATURE_VFP_FP16)) {
+#endif
                         return 1;
                     }
                     if (!extract32(rn, 1, 1)) {
@@ -4340,8 +4357,14 @@ static bool msr_banked_access_decode(DisasContext *s, int r, int sysm, int rn,
     /* These instructions are present only in ARMv8, or in ARMv7 with the
      * Virtualization Extensions.
      */
+#ifdef HPSC
+    if ((!arm_dc_feature(s, ARM_FEATURE_V8) && !arm_dc_feature(s, ARM_FEATURE_EL2))
+        && (!arm_dc_feature(s, ARM_FEATURE_V8R) && !arm_dc_feature(s, ARM_FEATURE_EL2))
+	) {
+#else
     if (!arm_dc_feature(s, ARM_FEATURE_V8) &&
         !arm_dc_feature(s, ARM_FEATURE_EL2)) {
+#endif
         goto undef;
     }
 
@@ -4374,7 +4397,7 @@ static bool msr_banked_access_decode(DisasContext *s, int r, int sysm, int rn,
             *tgtmode = ARM_CPU_MODE_MON;
             break;
         case 0x1e: /* SPSR_hyp */
-            *tgtmode = ARM_CPU_MODE_HYP;
+            *tgtmode = ARM_CPU_MODE_HYP;	/* DK: 0x1a */
             break;
         default: /* unallocated */
             goto undef;
@@ -4426,6 +4449,16 @@ static bool msr_banked_access_decode(DisasContext *s, int r, int sysm, int rn,
      * at translate time.
      */
     switch (*tgtmode) {
+#ifdef HPSC__
+    case ARM_CPU_MODE_SVC:
+        /* Note that we can forbid accesses from EL2 here because they
+         * must be from Hyp mode itself
+         */
+        if (!arm_dc_feature(s, ARM_FEATURE_EL2) || s->current_el < 2) {
+            goto undef;
+        }
+        break;
+#endif
     case ARM_CPU_MODE_MON:
         if (!arm_dc_feature(s, ARM_FEATURE_EL3) || s->ns) {
             goto undef;
@@ -4442,7 +4475,11 @@ static bool msr_banked_access_decode(DisasContext *s, int r, int sysm, int rn,
         /* Note that we can forbid accesses from EL2 here because they
          * must be from Hyp mode itself
          */
+#ifdef HPSC
+        if (!arm_dc_feature(s, ARM_FEATURE_EL2) || (!arm_dc_feature(s, ARM_FEATURE_V8R) && s->current_el < 3) || (arm_dc_feature(s, ARM_FEATURE_V8R) && s->current_el < 2)) {
+#else
         if (!arm_dc_feature(s, ARM_FEATURE_EL2) || s->current_el < 3) {
+#endif
             goto undef;
         }
         break;
@@ -5786,7 +5823,11 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
             break;
         case NEON_3R_FLOAT_MISC:
             /* VMAXNM/VMINNM in ARMv8 */
+#ifdef HPSC
+            if (u && !arm_dc_feature(s, ARM_FEATURE_V8) && !arm_dc_feature(s, ARM_FEATURE_V8R)) {
+#else
             if (u && !arm_dc_feature(s, ARM_FEATURE_V8)) {
+#endif
                 return 1;
             }
             break;
@@ -6998,8 +7039,13 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                 if ((neon_2rm_sizes[op] & (1 << size)) == 0) {
                     return 1;
                 }
+#ifdef HPSC
+                if (neon_2rm_is_v8_op(op) &&
+                    !arm_dc_feature(s, ARM_FEATURE_V8) && !arm_dc_feature(s, ARM_FEATURE_V8R)) {
+#else
                 if (neon_2rm_is_v8_op(op) &&
                     !arm_dc_feature(s, ARM_FEATURE_V8)) {
+#endif
                     return 1;
                 }
                 if ((op != NEON_2RM_VMOVN && op != NEON_2RM_VQMOVN) &&
@@ -7678,7 +7724,11 @@ static int disas_coproc_insn(DisasContext *s, uint32_t insn)
                  * in which case the syndrome information won't actually be
                  * guest visible.
                  */
+#ifdef HPSC
+                assert(!arm_dc_feature(s, ARM_FEATURE_V8) && !arm_dc_feature(s, ARM_FEATURE_V8R));
+#else
                 assert(!arm_dc_feature(s, ARM_FEATURE_V8));
+#endif
                 syndrome = syn_uncategorized();
                 break;
             }
@@ -8538,6 +8588,16 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
             tcg_temp_free_i32(tmp2);
             store_reg(s, rd, tmp);
             break;
+#ifdef HPSC
+        case 6: /* ERET */
+            if (s->current_el == 0) {
+                goto illegal_op;
+        }
+            gen_helper_exception_return(cpu_env);
+            /* Must exit loop to check un-masked IRQs */
+            s->base.is_jmp = DISAS_EXIT;
+            break;
+#endif
         case 7:
         {
             int imm16 = extract32(insn, 0, 4) | (extract32(insn, 8, 12) << 4);

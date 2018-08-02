@@ -18,6 +18,11 @@
 
 #define ARM_CPU_FREQ 1000000000 /* FIXME: 1 GHz, should be configurable */
 
+#ifdef HPSC
+#define HPSC_ARM_CP_STATE_BOTH ARM_CP_STATE_AA64
+#else
+#define HPSC_ARM_CP_STATE_BOTH ARM_CP_STATE_BOTH
+#endif
 #ifndef CONFIG_USER_ONLY
 /* Cacheability and shareability attributes for a memory access */
 typedef struct ARMCacheAttrs {
@@ -959,7 +964,11 @@ static void cpacr_write(CPUARMState *env, const ARMCPRegInfo *ri,
 static CPAccessResult cpacr_access(CPUARMState *env, const ARMCPRegInfo *ri,
                                    bool isread)
 {
+#ifdef HPSC
+    if (arm_feature(env, ARM_FEATURE_V8) || !arm_feature(env, ARM_FEATURE_V8R)) {
+#else
     if (arm_feature(env, ARM_FEATURE_V8)) {
+#endif
         /* Check if CPACR accesses are to be trapped to EL2 */
         if (arm_current_el(env) == 1 &&
             (env->cp15.cptr_el[2] & CPTR_TCPAC) && !arm_is_secure(env)) {
@@ -1010,7 +1019,13 @@ static const ARMCPRegInfo v6_cp_reginfo[] = {
      */
     { .name = "WFAR", .cp = 15, .crn = 6, .crm = 0, .opc1 = 0, .opc2 = 1,
       .access = PL1_RW, .type = ARM_CP_CONST, .resetvalue = 0, },
-    { .name = "CPACR", .state = ARM_CP_STATE_BOTH, .opc0 = 3,
+#ifdef HPSC
+    { .name = "CPACR", .state = ARM_CP_STATE_AA32, .cp = 15,
+      .crn = 1, .crm = 0, .opc1 = 0, .opc2 = 2, .accessfn = cpacr_access,
+      .access = PL1_RW, .fieldoffset = offsetof(CPUARMState, cp15.cpacr_el1),
+      .resetvalue = 0, .writefn = cpacr_write },
+#endif
+    { .name = "CPACR", .state = HPSC_ARM_CP_STATE_BOTH, .opc0 = 3,
       .crn = 1, .crm = 0, .opc1 = 0, .opc2 = 2, .accessfn = cpacr_access,
       .access = PL1_RW, .fieldoffset = offsetof(CPUARMState, cp15.cpacr_el1),
       .resetvalue = 0, .writefn = cpacr_write },
@@ -1045,7 +1060,11 @@ static CPAccessResult pmreg_access_xevcntr(CPUARMState *env,
                                            bool isread)
 {
     /* ER: event counter read trap control */
+#ifdef HPSC
+    if ((arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R))
+#else
     if (arm_feature(env, ARM_FEATURE_V8)
+#endif
         && arm_current_el(env) == 0
         && (env->cp15.c9_pmuserenr & (1 << 3)) != 0
         && isread) {
@@ -1060,7 +1079,11 @@ static CPAccessResult pmreg_access_swinc(CPUARMState *env,
                                          bool isread)
 {
     /* SW: software increment write trap control */
+#ifdef HPSC
+    if ((arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R))
+#else
     if (arm_feature(env, ARM_FEATURE_V8)
+#endif
         && arm_current_el(env) == 0
         && (env->cp15.c9_pmuserenr & (1 << 1)) != 0
         && !isread) {
@@ -1077,7 +1100,11 @@ static CPAccessResult pmreg_access_selr(CPUARMState *env,
                                         bool isread)
 {
     /* ER: event counter read trap control */
+#ifdef HPSC
+    if ((arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R))
+#else
     if (arm_feature(env, ARM_FEATURE_V8)
+#endif
         && arm_current_el(env) == 0
         && (env->cp15.c9_pmuserenr & (1 << 3)) != 0) {
         return CP_ACCESS_OK;
@@ -1091,7 +1118,11 @@ static CPAccessResult pmreg_access_ccntr(CPUARMState *env,
                                          bool isread)
 {
     /* CR: cycle counter read trap control */
+#ifdef HPSC
+    if ((arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R))
+#else
     if (arm_feature(env, ARM_FEATURE_V8)
+#endif
         && arm_current_el(env) == 0
         && (env->cp15.c9_pmuserenr & (1 << 2)) != 0
         && isread) {
@@ -1268,7 +1299,11 @@ static uint64_t pmxevtyper_read(CPUARMState *env, const ARMCPRegInfo *ri)
 static void pmuserenr_write(CPUARMState *env, const ARMCPRegInfo *ri,
                             uint64_t value)
 {
+#ifdef HPSC
+    if (arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R)) {
+#else
     if (arm_feature(env, ARM_FEATURE_V8)) {
+#endif
         env->cp15.c9_pmuserenr = value & 0xf;
     } else {
         env->cp15.c9_pmuserenr = value & 1;
@@ -1290,6 +1325,28 @@ static void pmintenclr_write(CPUARMState *env, const ARMCPRegInfo *ri,
     env->cp15.c9_pminten &= ~value;
 }
 
+#ifdef HPSC
+static void prselr_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                       uint64_t value)
+{
+    raw_write(env, ri, value & ~0x1FULL);
+}
+
+static uint64_t prselr_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return raw_read(env, ri);
+}
+static void prbar_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                       uint64_t value)
+{
+    raw_write(env, ri, value );
+}
+
+static uint64_t prbar_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return raw_read(env, ri);
+}
+#endif
 static void vbar_write(CPUARMState *env, const ARMCPRegInfo *ri,
                        uint64_t value)
 {
@@ -1320,7 +1377,11 @@ static void scr_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
          * On ARMv8, this bit is always available.
          */
         if (arm_feature(env, ARM_FEATURE_V7) &&
+#ifdef HPSC
+            (!arm_feature(env, ARM_FEATURE_V8) && !arm_feature(env, ARM_FEATURE_V8R))) {
+#else
             !arm_feature(env, ARM_FEATURE_V8)) {
+#endif
             valid_mask &= ~SCR_SMD;
         }
     }
@@ -1489,10 +1550,23 @@ static const ARMCPRegInfo v7_cp_reginfo[] = {
       .access = PL1_RW, .accessfn = access_tpm, .type = ARM_CP_ALIAS,
       .fieldoffset = offsetof(CPUARMState, cp15.c9_pminten),
       .writefn = pmintenclr_write },
-    { .name = "CCSIDR", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "CCSIDR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .crn = 0, .crm = 0, .opc1 = 1, .opc2 = 0,
+      .access = PL1_R, .readfn = ccsidr_read, .type = ARM_CP_NO_RAW },
+    { .name = "CSSELR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .crn = 0, .crm = 0, .opc1 = 2, .opc2 = 0,
+      .access = PL1_RW, .writefn = csselr_write, .resetvalue = 0,
+      .bank_fieldoffsets = { offsetof(CPUARMState, cp15.csselr_s),
+                             offsetof(CPUARMState, cp15.csselr_ns) } },
+    { .name = "AIDR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 1, .crn = 0, .crm = 0, .opc2 = 7,
+      .access = PL1_R, .type = ARM_CP_CONST, .resetvalue = 0 },
+#endif
+    { .name = "CCSIDR", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .crn = 0, .crm = 0, .opc1 = 1, .opc2 = 0,
       .access = PL1_R, .readfn = ccsidr_read, .type = ARM_CP_NO_RAW },
-    { .name = "CSSELR", .state = ARM_CP_STATE_BOTH,
+    { .name = "CSSELR", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .crn = 0, .crm = 0, .opc1 = 2, .opc2 = 0,
       .access = PL1_RW, .writefn = csselr_write, .resetvalue = 0,
       .bank_fieldoffsets = { offsetof(CPUARMState, cp15.csselr_s),
@@ -1500,7 +1574,7 @@ static const ARMCPRegInfo v7_cp_reginfo[] = {
     /* Auxiliary ID register: this actually has an IMPDEF value but for now
      * just RAZ for all cores:
      */
-    { .name = "AIDR", .state = ARM_CP_STATE_BOTH,
+    { .name = "AIDR", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 1, .crn = 0, .crm = 0, .opc2 = 7,
       .access = PL1_R, .type = ARM_CP_CONST, .resetvalue = 0 },
     /* Auxiliary fault status registers: these also are IMPDEF, and we
@@ -1540,7 +1614,12 @@ static const ARMCPRegInfo v7_cp_reginfo[] = {
       .bank_fieldoffsets = { offsetof(CPUARMState, cp15.mair1_s),
                              offsetof(CPUARMState, cp15.mair1_ns) },
       .resetfn = arm_cp_reset_ignore },
-    { .name = "ISR_EL1", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "ISR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 12, .crm = 1, .opc2 = 0,
+      .type = ARM_CP_NO_RAW, .access = PL1_R, .readfn = isr_read },
+#endif
+    { .name = "ISR_EL1", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 0, .crn = 12, .crm = 1, .opc2 = 0,
       .type = ARM_CP_NO_RAW, .access = PL1_R, .readfn = isr_read },
     /* 32 bit ITLB invalidates */
@@ -2062,15 +2141,23 @@ static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
       .fieldoffset = offsetof(CPUARMState, cp15.c14_cntfrq),
       .resetvalue = (1000 * 1000 * 1000) / GTIMER_SCALE,
     },
+#ifdef HPSC
+    { .name = "CNTKCTL", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 1, .opc2 = 0,
+      .access = PL1_RW,
+      .fieldoffset = offsetof(CPUARMState, cp15.c14_cntkctl),
+      .resetvalue = 0,
+    },
+#endif
     /* overall control: mostly access permissions */
-    { .name = "CNTKCTL", .state = ARM_CP_STATE_BOTH,
+    { .name = "CNTKCTL", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 0, .crn = 14, .crm = 1, .opc2 = 0,
       .access = PL1_RW,
       .fieldoffset = offsetof(CPUARMState, cp15.c14_cntkctl),
       .resetvalue = 0,
     },
     /* per-timer control */
-    { .name = "CNTP_CTL", .cp = 15, .crn = 14, .crm = 2, .opc1 = 0, .opc2 = 1,
+    { .name = "CNTP_CTL", .cp = 15,.crn = 14, .crm = 2, .opc1 = 0, .opc2 = 1,
       .secure = ARM_CP_SECSTATE_NS,
       .type = ARM_CP_IO | ARM_CP_ALIAS, .access = PL1_RW | PL0_R,
       .accessfn = gt_ptimer_access,
@@ -2559,6 +2646,19 @@ static uint64_t pmsav5_insn_ap_read(CPUARMState *env, const ARMCPRegInfo *ri)
     return simple_mpu_ap_bits(env->cp15.pmsav5_insn_ap);
 }
 
+static uint64_t pmsav8r_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return raw_read(env, ri);
+}
+
+static void pmsav8r_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                         uint64_t value)
+{
+    ARMCPU *cpu = arm_env_get_cpu(env);
+    tlb_flush(CPU(cpu)); /* Mappings may have changed - purge! */
+    raw_write(env, ri, value);
+}
+
 static uint64_t pmsav7_read(CPUARMState *env, const ARMCPRegInfo *ri)
 {
     uint32_t *u32p = *(uint32_t **)raw_ptr(env, ri);
@@ -2687,7 +2787,11 @@ static void vmsa_ttbcr_raw_write(CPUARMState *env, const ARMCPRegInfo *ri,
     TCR *tcr = raw_ptr(env, ri);
     int maskshift = extract32(value, 0, 3);
 
+#ifdef HPSC
+    if (!arm_feature(env, ARM_FEATURE_V8) && !arm_feature(env, ARM_FEATURE_V8R)) {
+#else
     if (!arm_feature(env, ARM_FEATURE_V8)) {
+#endif
         if (arm_feature(env, ARM_FEATURE_LPAE) && (value & TTBCR_EAE)) {
             /* Pre ARMv8 bits [21:19], [15:14] and [6:3] are UNK/SBZP when
              * using Long-desciptor translation table format */
@@ -3041,7 +3145,12 @@ static uint64_t mpidr_read(CPUARMState *env, const ARMCPRegInfo *ri)
 }
 
 static const ARMCPRegInfo mpidr_cp_reginfo[] = {
-    { .name = "MPIDR", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "MPIDR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .crn = 0, .crm = 0, .opc1 = 0, .opc2 = 5,
+      .access = PL1_R, .readfn = mpidr_read, .type = ARM_CP_NO_RAW },
+#endif
+    { .name = "MPIDR", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .crn = 0, .crm = 0, .opc1 = 0, .opc2 = 5,
       .access = PL1_R, .readfn = mpidr_read, .type = ARM_CP_NO_RAW },
     REGINFO_SENTINEL
@@ -3049,7 +3158,13 @@ static const ARMCPRegInfo mpidr_cp_reginfo[] = {
 
 static const ARMCPRegInfo lpae_cp_reginfo[] = {
     /* NOP AMAIR0/1 */
-    { .name = "AMAIR0", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "AMAIR0", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .crn = 10, .crm = 3, .opc1 = 0, .opc2 = 0,
+      .access = PL1_RW, .type = ARM_CP_CONST,
+      .resetvalue = 0 },
+#endif
+    { .name = "AMAIR0", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .crn = 10, .crm = 3, .opc1 = 0, .opc2 = 0,
       .access = PL1_RW, .type = ARM_CP_CONST,
       .resetvalue = 0 },
@@ -3925,6 +4040,22 @@ static void hcr_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
 }
 
 static const ARMCPRegInfo el2_cp_reginfo[] = {
+#ifdef HPSC
+    { .name = "HCR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 0,
+      .access = PL2_RW, .fieldoffset = offsetof(CPUARMState, cp15.hcr_el2),
+      .writefn = hcr_write },
+    { .name = "ELR_HYP", .state = ARM_CP_STATE_AA32,
+      .type = ARM_CP_ALIAS,
+      .cp = 15, .opc1 = 4, .crn = 4, .crm = 0, .opc2 = 1,
+      .access = PL2_RW,
+      .fieldoffset = offsetof(CPUARMState, elr_el[2]) },
+    { .name = "SPSR_HYP", .state = ARM_CP_STATE_AA32,
+      .type = ARM_CP_ALIAS,
+      .cp = 15, .opc1 = 4, .crn = 4, .crm = 0, .opc2 = 0,
+      .access = PL2_RW,
+      .fieldoffset = offsetof(CPUARMState, banked_spsr[BANK_HYP]) },
+#endif
     { .name = "HCR_EL2", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 0,
       .access = PL2_RW, .fieldoffset = offsetof(CPUARMState, cp15.hcr_el2),
@@ -3934,6 +4065,11 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .opc0 = 3, .opc1 = 4, .crn = 4, .crm = 0, .opc2 = 1,
       .access = PL2_RW,
       .fieldoffset = offsetof(CPUARMState, elr_el[2]) },
+#ifdef HPSC
+    { .name = "HSR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 5, .crm = 2, .opc2 = 0,
+      .access = PL2_RW, .fieldoffset = offsetof(CPUARMState, cp15.esr_el[2]) },
+#endif
     { .name = "ESR_EL2", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 4, .crn = 5, .crm = 2, .opc2 = 0,
       .access = PL2_RW, .fieldoffset = offsetof(CPUARMState, cp15.esr_el[2]) },
@@ -3945,6 +4081,13 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .opc0 = 3, .opc1 = 4, .crn = 4, .crm = 0, .opc2 = 0,
       .access = PL2_RW,
       .fieldoffset = offsetof(CPUARMState, banked_spsr[BANK_HYP]) },
+#ifdef HPSC
+    { .name = "HVBAR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 12, .crm = 0, .opc2 = 0,
+      .access = PL2_RW, .writefn = vbar_write,
+      .fieldoffset = offsetof(CPUARMState, cp15.vbar_el[2]),
+      .resetvalue = 0 },
+#endif
     { .name = "VBAR_EL2", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 4, .crn = 12, .crm = 0, .opc2 = 0,
       .access = PL2_RW, .writefn = vbar_write,
@@ -3954,11 +4097,25 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .opc0 = 3, .opc1 = 6, .crn = 4, .crm = 1, .opc2 = 0,
       .access = PL3_RW, .type = ARM_CP_ALIAS,
       .fieldoffset = offsetof(CPUARMState, sp_el[2]) },
-    { .name = "CPTR_EL2", .state = ARM_CP_STATE_BOTH,
+    { .name = "CPTR_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 2,
       .access = PL2_RW, .accessfn = cptr_access, .resetvalue = 0,
       .fieldoffset = offsetof(CPUARMState, cp15.cptr_el[2]) },
-    { .name = "MAIR_EL2", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "HCPTR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 2,
+      .access = PL2_RW, .accessfn = cptr_access, .resetvalue = 0,
+      .fieldoffset = offsetof(CPUARMState, cp15.cptr_el[2]) },
+    { .name = "HMAIR0", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 10, .crm = 2, .opc2 = 0,
+      .access = PL2_RW, .fieldoffset = offsetof(CPUARMState, cp15.mair_el[2]),
+      .resetvalue = 0 },
+    { .name = "HAMAIR0", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 10, .crm = 3, .opc2 = 0,
+      .access = PL2_RW, .type = ARM_CP_CONST,
+      .resetvalue = 0 },
+#endif
+    { .name = "MAIR_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 10, .crm = 2, .opc2 = 0,
       .access = PL2_RW, .fieldoffset = offsetof(CPUARMState, cp15.mair_el[2]),
       .resetvalue = 0 },
@@ -3966,7 +4123,7 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .opc1 = 4, .crn = 10, .crm = 2, .opc2 = 1,
       .access = PL2_RW, .type = ARM_CP_ALIAS,
       .fieldoffset = offsetofhigh32(CPUARMState, cp15.mair_el[2]) },
-    { .name = "AMAIR_EL2", .state = ARM_CP_STATE_BOTH,
+    { .name = "AMAIR_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 10, .crm = 3, .opc2 = 0,
       .access = PL2_RW, .type = ARM_CP_CONST,
       .resetvalue = 0 },
@@ -3975,11 +4132,21 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .opc1 = 4, .crn = 10, .crm = 3, .opc2 = 1,
       .access = PL2_RW, .type = ARM_CP_CONST,
       .resetvalue = 0 },
-    { .name = "AFSR0_EL2", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "HADFSR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 5, .crm = 1, .opc2 = 0,
+      .access = PL2_RW, .type = ARM_CP_CONST,
+      .resetvalue = 0 },
+    { .name = "HAIFSR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 5, .crm = 1, .opc2 = 1,
+      .access = PL2_RW, .type = ARM_CP_CONST,
+      .resetvalue = 0 },
+#endif
+    { .name = "AFSR0_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 5, .crm = 1, .opc2 = 0,
       .access = PL2_RW, .type = ARM_CP_CONST,
       .resetvalue = 0 },
-    { .name = "AFSR1_EL2", .state = ARM_CP_STATE_BOTH,
+    { .name = "AFSR1_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 5, .crm = 1, .opc2 = 1,
       .access = PL2_RW, .type = ARM_CP_CONST,
       .resetvalue = 0 },
@@ -4012,11 +4179,21 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .opc0 = 3, .opc1 = 4, .crn = 2, .crm = 1, .opc2 = 0,
       .access = PL2_RW, .writefn = vttbr_write,
       .fieldoffset = offsetof(CPUARMState, cp15.vttbr_el2) },
-    { .name = "SCTLR_EL2", .state = ARM_CP_STATE_BOTH,
+    { .name = "SCTLR_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 0, .opc2 = 0,
       .access = PL2_RW, .raw_writefn = raw_write, .writefn = sctlr_write,
       .fieldoffset = offsetof(CPUARMState, cp15.sctlr_el[2]) },
-    { .name = "TPIDR_EL2", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "HSCTLR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 1, .crm = 0, .opc2 = 0,
+      .access = PL2_RW, .raw_writefn = raw_write, .writefn = sctlr_write,
+      .fieldoffset = offsetof(CPUARMState, cp15.sctlr_el[2]) },
+    { .name = "HTPIDR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 13, .crm = 0, .opc2 = 2,
+      .access = PL2_RW, .resetvalue = 0,
+      .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[2]) },
+#endif
+    { .name = "TPIDR_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 13, .crm = 0, .opc2 = 2,
       .access = PL2_RW, .resetvalue = 0,
       .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[2]) },
@@ -4103,6 +4280,16 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
        */
       .access = PL2_RW, .resetvalue = 3,
       .fieldoffset = offsetof(CPUARMState, cp15.cnthctl_el2) },
+#ifdef HSPC
+    { .name = "CNTHCTL", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 14, .crm = 1, .opc2 = 0,
+      /* ARMv7 requires bit 0 and 1 to reset to 1. ARMv8 defines the
+       * reset values as IMPDEF. We choose to reset to 3 to comply with
+       * both ARMv7 and ARMv8.
+       */
+      .access = PL2_RW, .resetvalue = 3,
+      .fieldoffset = offsetof(CPUARMState, cp15.cnthctl_el2) },
+#endif
     { .name = "CNTVOFF_EL2", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 4, .crn = 14, .crm = 0, .opc2 = 3,
       .access = PL2_RW, .type = ARM_CP_IO, .resetvalue = 0,
@@ -4121,12 +4308,26 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .fieldoffset = offsetof(CPUARMState, cp15.c14_timer[GTIMER_HYP].cval),
       .access = PL2_RW, .type = ARM_CP_64BIT | ARM_CP_IO,
       .writefn = gt_hyp_cval_write, .raw_writefn = raw_write },
-    { .name = "CNTHP_TVAL_EL2", .state = ARM_CP_STATE_BOTH,
+    { .name = "CNTHP_TVAL_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 14, .crm = 2, .opc2 = 0,
       .type = ARM_CP_NO_RAW | ARM_CP_IO, .access = PL2_RW,
       .resetfn = gt_hyp_timer_reset,
       .readfn = gt_hyp_tval_read, .writefn = gt_hyp_tval_write },
-    { .name = "CNTHP_CTL_EL2", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "CNTHP_TVAL", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 14, .crm = 2, .opc2 = 0,
+      .type = ARM_CP_NO_RAW | ARM_CP_IO, .access = PL2_RW,
+      .resetfn = gt_hyp_timer_reset,
+      .readfn = gt_hyp_tval_read, .writefn = gt_hyp_tval_write },
+    { .name = "CNTHP_CTL", .state = ARM_CP_STATE_AA32,
+      .type = ARM_CP_IO,
+      .cp = 15, .opc1 = 4, .crn = 14, .crm = 2, .opc2 = 1,
+      .access = PL2_RW,
+      .fieldoffset = offsetof(CPUARMState, cp15.c14_timer[GTIMER_HYP].ctl),
+      .resetvalue = 0,
+      .writefn = gt_hyp_ctl_write, .raw_writefn = raw_write },
+#endif
+    { .name = "CNTHP_CTL_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
       .type = ARM_CP_IO,
       .opc0 = 3, .opc1 = 4, .crn = 14, .crm = 2, .opc2 = 1,
       .access = PL2_RW,
@@ -4151,8 +4352,14 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .opc0 = 3, .opc1 = 4, .crn = 6, .crm = 0, .opc2 = 4,
       .access = PL2_RW,
       .fieldoffset = offsetof(CPUARMState, cp15.hpfar_el2) },
-    { .name = "HSTR_EL2", .state = ARM_CP_STATE_BOTH,
-      .cp = 15, .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 3,
+#ifdef HPSC
+    { .name = "HSTR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 3,
+      .access = PL2_RW,
+      .fieldoffset = offsetof(CPUARMState, cp15.hstr_el2) },
+#endif
+    { .name = "HSTR_EL2", .state = HPSC_ARM_CP_STATE_BOTH,
+      .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 3,
       .access = PL2_RW,
       .fieldoffset = offsetof(CPUARMState, cp15.hstr_el2) },
     REGINFO_SENTINEL
@@ -4758,7 +4965,11 @@ void register_cp_regs_for_features(ARMCPU *cpu)
     }
 
     define_arm_cp_regs(cpu, cp_reginfo);
+#ifdef HPSC
+    if (!arm_feature(env, ARM_FEATURE_V8) && !arm_feature(env, ARM_FEATURE_V8R)) {
+#else
     if (!arm_feature(env, ARM_FEATURE_V8)) {
+#endif
         /* Must go early as it is full of wildcards that may be
          * overridden by later definitions.
          */
@@ -4877,8 +5088,14 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         define_one_arm_cp_reg(cpu, &pmcr);
         define_one_arm_cp_reg(cpu, &pmcr64);
 #endif
+        ARMCPRegInfo clidr32 = {
+            .name = "CLIDR", .state = ARM_CP_STATE_AA32,
+            .cp = 15, .crn = 0, .crm = 0, .opc1 = 1, .opc2 = 1,
+            .access = PL1_R, .type = ARM_CP_CONST, .resetvalue = cpu->clidr
+        };
+        define_one_arm_cp_reg(cpu, &clidr32);
         ARMCPRegInfo clidr = {
-            .name = "CLIDR", .state = ARM_CP_STATE_BOTH,
+            .name = "CLIDR_EL1", .state = ARM_CP_STATE_AA64,
             .opc0 = 3, .crn = 0, .crm = 0, .opc1 = 1, .opc2 = 1,
             .access = PL1_R, .type = ARM_CP_CONST, .resetvalue = cpu->clidr
         };
@@ -4888,7 +5105,11 @@ void register_cp_regs_for_features(ARMCPU *cpu)
     } else {
         define_arm_cp_regs(cpu, not_v7_cp_reginfo);
     }
+#ifdef HPSC
+    if (arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R)) {
+#else
     if (arm_feature(env, ARM_FEATURE_V8)) {
+#endif
         /* AArch64 ID registers, which all have impdef reset values.
          * Note that within the ID register ranges the unused slots
          * must all RAZ, not UNDEF; future architecture versions may
@@ -5119,6 +5340,16 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         define_arm_cp_regs(cpu, el2_cp_reginfo);
         /* RVBAR_EL2 is only implemented if EL2 is the highest EL */
         if (!arm_feature(env, ARM_FEATURE_EL3)) {
+#ifdef HPSC
+        if (!arm_feature(env, ARM_FEATURE_EL3) && arm_feature(env, ARM_FEATURE_V8R)) {
+          ARMCPRegInfo rvbar = {
+                .name = "RVBAR", .state = ARM_CP_STATE_AA32,
+                .cp = 15, .opc1 = 0, .crn = 12, .crm = 0, .opc2 = 1,
+                .type = ARM_CP_CONST, .access = PL1_R, .resetvalue = cpu->rvbar
+          };
+          define_one_arm_cp_reg(cpu, &rvbar);
+        }
+#endif
             ARMCPRegInfo rvbar = {
                 .name = "RVBAR_EL2", .state = ARM_CP_STATE_AA64,
                 .opc0 = 3, .opc1 = 4, .crn = 12, .crm = 0, .opc2 = 1,
@@ -5196,7 +5427,11 @@ void register_cp_regs_for_features(ARMCPU *cpu)
             define_one_arm_cp_reg(cpu, &nsacr);
         }
     } else {
+#ifdef HPSC
+        if (arm_feature(env, ARM_FEATURE_V8) || arm_feature(env, ARM_FEATURE_V8R)) {
+#else
         if (arm_feature(env, ARM_FEATURE_V8)) {
+#endif
             ARMCPRegInfo nsacr = {
                 .name = "NSACR", .type = ARM_CP_CONST,
                 .cp = 15, .opc1 = 0, .crn = 1, .crm = 1, .opc2 = 2,
@@ -5306,11 +5541,29 @@ void register_cp_regs_for_features(ARMCPU *cpu)
             { .name = "MIDR", .type = ARM_CP_ALIAS | ARM_CP_CONST,
               .cp = 15, .crn = 0, .crm = 0, .opc1 = 0, .opc2 = 7,
               .access = PL1_R, .resetvalue = cpu->midr },
-            { .name = "REVIDR_EL1", .state = ARM_CP_STATE_BOTH,
+            { .name = "REVIDR_EL1", .state = ARM_CP_STATE_AA64,
               .opc0 = 3, .opc1 = 0, .crn = 0, .crm = 0, .opc2 = 6,
               .access = PL1_R, .type = ARM_CP_CONST, .resetvalue = cpu->revidr },
             REGINFO_SENTINEL
         };
+#ifdef HPSC
+        ARMCPRegInfo id_v8r_midr_cp_reginfo[] = {
+            { .name = "MIDR", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 0, .crn = 0, .crm = 0, .opc2 = 0,
+              .access = PL1_R, .type = ARM_CP_NO_RAW, .resetvalue = cpu->midr,
+              .fieldoffset = offsetof(CPUARMState, cp15.c0_cpuid),
+              .readfn = midr_read },
+            /* crn = 0 op1 = 0 crm = 0 op2 = 4,7 : AArch32 aliases of MIDR */
+            { .name = "MIDR", .type = ARM_CP_ALIAS | ARM_CP_CONST,
+              .cp = 15, .crn = 0, .crm = 0, .opc1 = 0, .opc2 = 7,
+              .access = PL1_R, .resetvalue = cpu->midr },
+	    /* MPUIR is define in id_mpuir_reginfo */
+            { .name = "REVIDR", .state = ARM_CP_STATE_BOTH,
+              .cp = 15, .opc1 = 0, .crn = 0, .crm = 0, .opc2 = 6,
+              .access = PL1_R, .type = ARM_CP_CONST, .resetvalue = cpu->revidr },
+            REGINFO_SENTINEL
+        };
+#endif
         ARMCPRegInfo id_cp_reginfo[] = {
             /* These are common to v8 and pre-v8 */
             { .name = "CTR",
@@ -5339,6 +5592,14 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .access = PL1_R, .type = ARM_CP_CONST,
               .resetvalue = cpu->pmsav7_dregion << 8
         };
+#ifdef HPSC
+        ARMCPRegInfo id_hmpuir_reginfo = {
+              .name = "HMPUIR",
+              .cp = 15, .crn = 0, .crm = 0, .opc1 = 4, .opc2 = 4,
+              .access = PL1_R, .type = ARM_CP_CONST,
+              .resetvalue = cpu->pmsav7_dregion << 8
+        };
+#endif
         ARMCPRegInfo crn0_wi_reginfo = {
             .name = "CRN0_WI", .cp = 15, .crn = 0, .crm = CP_ANY,
             .opc1 = CP_ANY, .opc2 = CP_ANY, .access = PL1_W,
@@ -5365,7 +5626,13 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         }
         if (arm_feature(env, ARM_FEATURE_V8)) {
             define_arm_cp_regs(cpu, id_v8_midr_cp_reginfo);
-        } else {
+        } 
+#ifdef HPSC
+        else if (arm_feature(env, ARM_FEATURE_V8R)) {
+            define_arm_cp_regs(cpu, id_v8r_midr_cp_reginfo);
+        }
+#endif
+        else {
             define_arm_cp_regs(cpu, id_pre_v8_midr_cp_reginfo);
         }
         define_arm_cp_regs(cpu, id_cp_reginfo);
@@ -5374,6 +5641,11 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         } else if (arm_feature(env, ARM_FEATURE_V7)) {
             define_one_arm_cp_reg(cpu, &id_mpuir_reginfo);
         }
+#ifdef HPSC
+        else if (arm_feature(env, ARM_FEATURE_V8R)) {
+            define_arm_cp_regs(cpu, &id_hmpuir_reginfo);
+	}
+#endif
     }
 
     if (arm_feature(env, ARM_FEATURE_MPIDR)) {
@@ -5382,11 +5654,21 @@ void register_cp_regs_for_features(ARMCPU *cpu)
 
     if (arm_feature(env, ARM_FEATURE_AUXCR)) {
         ARMCPRegInfo auxcr_reginfo[] = {
-            { .name = "ACTLR_EL1", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+            { .name = "ACTLR", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 0, .crn = 1, .crm = 0, .opc2 = 1,
+              .access = PL1_RW, .type = ARM_CP_CONST,
+              .resetvalue = cpu->reset_auxcr },
+            { .name = "HACTLR", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 1, .crm = 0, .opc2 = 1,
+              .access = PL2_RW, .type = ARM_CP_CONST,
+              .resetvalue = 0 },
+#endif
+            { .name = "ACTLR_EL1", .state = ARM_CP_STATE_AA64,
               .opc0 = 3, .opc1 = 0, .crn = 1, .crm = 0, .opc2 = 1,
               .access = PL1_RW, .type = ARM_CP_CONST,
               .resetvalue = cpu->reset_auxcr },
-            { .name = "ACTLR_EL2", .state = ARM_CP_STATE_BOTH,
+            { .name = "ACTLR_EL2", .state = ARM_CP_STATE_AA64,
               .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 0, .opc2 = 1,
               .access = PL2_RW, .type = ARM_CP_CONST,
               .resetvalue = 0 },
@@ -5435,9 +5717,101 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         }
     }
 
+#ifdef HPSC
+    if (arm_feature(env, ARM_FEATURE_V8R)) {
+        int i, j;
+        ARMCPRegInfo prselr_cp_reginfo[] = {
+            { .name = "PRSELR", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = 2, .opc1 = 0, .opc2 = 1,
+              .access = PL1_RW, .writefn = prselr_write, .readfn = prselr_read,
+              .fieldoffset = offsetof(CPUARMState, cp15.prselr),
+              .resetvalue = 0 },
+            { .name = "PRBAR", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = 3, .opc1 = 0, .opc2 = 0,
+              .access = PL1_RW, .writefn = prbar_write, .readfn = prbar_read,
+              .fieldoffset = offsetof(CPUARMState, cp15.prbar),
+              .resetvalue = 0 },
+            { .name = "PRLAR", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = 3, .opc1 = 0, .opc2 = 1,
+              .access = PL1_RW, .writefn = prbar_write, .readfn = prbar_read,
+              .fieldoffset = offsetof(CPUARMState, cp15.prlar),
+              .resetvalue = 0 },
+            REGINFO_SENTINEL
+        };
+        define_arm_cp_regs(cpu, prselr_cp_reginfo);
+        for (i = 0, j = 8; i < 15; i = i+2, j++) {
+           ARMCPRegInfo prbar_cp_reginfo[] = {
+            { .name = "PRBAR_EVEN", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 0, .opc2 = 0,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.prbar[i]),
+              .resetvalue = 0 },
+            { .name = "PRBAR_ODD", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 0, .opc2 = 4,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.prbar[i+1]),
+              .resetvalue = 0 },
+            { .name = "PRLAR_EVEN", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 0, .opc2 = 1,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.prlar[i]),
+              .resetvalue = 0 },
+            { .name = "PRLAR_ODD", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 0, .opc2 = 5,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.prlar[i+1]),
+              .resetvalue = 0 },
+            { .name = "HPRBAR_EVEN", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 4, .opc2 = 0,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.hprbar[i]),
+              .resetvalue = 0 },
+            { .name = "HPRBAR_ODD", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 4, .opc2 = 4,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.hprbar[i+1]),
+              .resetvalue = 0 },
+            { .name = "HPRLAR_EVEN", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 4, .opc2 = 1,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.hprlar[i]),
+              .resetvalue = 0 },
+            { .name = "HPRLAR_ODD", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 6, .crm = j, .opc1 = 4, .opc2 = 5,
+              .access = PL1_RW, .writefn = pmsav8r_write, .readfn = pmsav8r_read,
+              .fieldoffset = offsetof(CPUARMState, pmsav8r.hprlar[i+1]),
+              .resetvalue = 0 },
+            REGINFO_SENTINEL
+           };
+           define_arm_cp_regs(cpu, prbar_cp_reginfo);
+        };
+        ARMCPRegInfo v8r_cp_reginfo[] = {
+           { .name = "IMP_ATCMREGIONR", .cp = 15, .crn = 9, .crm = 1, .opc1 = 0, .opc2 = 0,
+             .access = PL1_RW, .type = ARM_CP_CONST,
+             .raw_writefn = raw_write, .resetvalue = cpu->tcmregion[0] },
+           { .name = "IMP_BTCMREGIONR", .cp = 15, .crn = 9, .crm = 1, .opc1 = 0, .opc2 = 1,
+             .access = PL1_RW, .type = ARM_CP_CONST,
+             .raw_writefn = raw_write, .resetvalue = cpu->tcmregion[1] },
+           { .name = "IMP_BTCMREGIONR", .cp = 15, .crn = 9, .crm = 1, .opc1 = 0, .opc2 = 2,
+             .access = PL1_RW, .type = ARM_CP_CONST,
+             .raw_writefn = raw_write, .resetvalue = cpu->tcmregion[2] },
+           REGINFO_SENTINEL
+        };
+        define_arm_cp_regs(cpu, v8r_cp_reginfo);
+    };
+#endif
+
     if (arm_feature(env, ARM_FEATURE_VBAR)) {
         ARMCPRegInfo vbar_cp_reginfo[] = {
-            { .name = "VBAR", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+            { .name = "VBAR", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .crn = 12, .crm = 0, .opc1 = 0, .opc2 = 0,
+              .access = PL1_RW, .writefn = vbar_write,
+              .bank_fieldoffsets = { offsetof(CPUARMState, cp15.vbar_s),
+                                     offsetof(CPUARMState, cp15.vbar_ns) },
+              .resetvalue = 0 },
+#endif
+            { .name = "VBAR", .state = ARM_CP_STATE_AA64,
               .opc0 = 3, .crn = 12, .crm = 0, .opc1 = 0, .opc2 = 0,
               .access = PL1_RW, .writefn = vbar_write,
               .bank_fieldoffsets = { offsetof(CPUARMState, cp15.vbar_s),
@@ -5447,17 +5821,27 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         };
         define_arm_cp_regs(cpu, vbar_cp_reginfo);
     }
-
     /* Generic registers whose values depend on the implementation */
     {
-        ARMCPRegInfo sctlr = {
-            .name = "SCTLR", .state = ARM_CP_STATE_BOTH,
-            .opc0 = 3, .opc1 = 0, .crn = 1, .crm = 0, .opc2 = 0,
-            .access = PL1_RW,
-            .bank_fieldoffsets = { offsetof(CPUARMState, cp15.sctlr_s),
-                                   offsetof(CPUARMState, cp15.sctlr_ns) },
-            .writefn = sctlr_write, .resetvalue = cpu->reset_sctlr,
-            .raw_writefn = raw_write,
+#ifdef HPSC
+        ARMCPRegInfo sctlrV8R = 
+            { .name = "SCTLR", .state = ARM_CP_STATE_AA32,
+             .cp = 15, .opc1 = 0, .crn = 1, .crm = 0, .opc2 = 0,
+             .access = PL1_RW,
+             .bank_fieldoffsets = { offsetof(CPUARMState, cp15.sctlr_s),
+                                    offsetof(CPUARMState, cp15.sctlr_ns) },
+             .writefn = sctlr_write, .resetvalue = cpu->reset_sctlr,
+             .raw_writefn = raw_write,
+            };
+        define_one_arm_cp_reg(cpu, &sctlrV8R);
+#endif
+        ARMCPRegInfo sctlr = { .name = "SCTLR", .state = ARM_CP_STATE_AA64,
+             .opc0 = 3, .opc1 = 0, .crn = 1, .crm = 0, .opc2 = 0,
+             .access = PL1_RW,
+             .bank_fieldoffsets = { offsetof(CPUARMState, cp15.sctlr_s),
+                                    offsetof(CPUARMState, cp15.sctlr_ns) },
+             .writefn = sctlr_write, .resetvalue = cpu->reset_sctlr,
+             .raw_writefn = raw_write,
         };
         if (arm_feature(env, ARM_FEATURE_XSCALE)) {
             /* Normally we would always end the TB on an SCTLR write, but Linux
@@ -9194,6 +9578,12 @@ static inline void get_phys_addr_pmsav7_default(CPUARMState *env,
                                                 int32_t address, int *prot)
 {
     if (!arm_feature(env, ARM_FEATURE_M)) {
+#ifdef HPSC
+        if (arm_feature(env, ARM_FEATURE_V8R)) {
+            * prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
+            return;
+	}
+#endif
         *prot = PAGE_READ | PAGE_WRITE;
         switch (address) {
         case 0xF0000000 ... 0xFFFFFFFF:
@@ -9585,6 +9975,22 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
              * with bits [4:0] all zeroes, but the limit address is bits
              * [31:5] from the register with bits [4:0] all ones.
              */
+#ifdef HPSC
+            uint32_t base; 
+            uint32_t limit;
+	    if (arm_feature(env, ARM_FEATURE_V8R)) {
+              base = env->pmsav8r.prbar[n] & ~0x1f;
+              limit = env->pmsav8r.prlar[n] | 0x1f;
+            } else {
+              base = env->pmsav8.rbar[secure][n] & ~0x1f;
+              limit = env->pmsav8.rlar[secure][n] | 0x1f;
+            }
+
+            if (!(env->pmsav8r.prlar[n] & 0x1)) {
+                /* Region disabled */
+                continue;
+            }
+#else
             uint32_t base = env->pmsav8.rbar[secure][n] & ~0x1f;
             uint32_t limit = env->pmsav8.rlar[secure][n] | 0x1f;
 
@@ -9592,6 +9998,7 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
                 /* Region disabled */
                 continue;
             }
+#endif
 
             if (address < base || address > limit) {
                 continue;
@@ -9637,9 +10044,20 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
         /* hit using the background region */
         get_phys_addr_pmsav7_default(env, mmu_idx, address, prot);
     } else {
+#ifdef HPSC
+        uint32_t ap;
+        uint32_t xn;
+        if (arm_feature(env, ARM_FEATURE_V8R)) {
+          ap = extract32(env->pmsav8r.prbar[matchregion], 1, 2);
+          xn = extract32(env->pmsav8r.prbar[matchregion], 0, 1);
+        } else {
+          ap = extract32(env->pmsav8.rbar[secure][matchregion], 1, 2);
+          xn = extract32(env->pmsav8.rbar[secure][matchregion], 0, 1);
+        }
+#else
         uint32_t ap = extract32(env->pmsav8.rbar[secure][matchregion], 1, 2);
         uint32_t xn = extract32(env->pmsav8.rbar[secure][matchregion], 0, 1);
-
+#endif
         if (m_is_system_region(env, address)) {
             /* System space is always execute never */
             xn = 1;
@@ -9911,8 +10329,13 @@ static bool get_phys_addr(CPUARMState *env, target_ulong address,
     /* Fast Context Switch Extension. This doesn't exist at all in v8.
      * In v7 and earlier it affects all stage 1 translations.
      */
+#ifdef HPSC
+    if (address < 0x02000000 && mmu_idx != ARMMMUIdx_S2NS
+        && !arm_feature(env, ARM_FEATURE_V8) && !arm_feature(env, ARM_FEATURE_V8R)) {
+#else
     if (address < 0x02000000 && mmu_idx != ARMMMUIdx_S2NS
         && !arm_feature(env, ARM_FEATURE_V8)) {
+#endif
         if (regime_el(env, mmu_idx) == 3) {
             address += env->cp15.fcseidr_s;
         } else {
@@ -9928,6 +10351,12 @@ static bool get_phys_addr(CPUARMState *env, target_ulong address,
             /* PMSAv8 */
             ret = get_phys_addr_pmsav8(env, address, access_type, mmu_idx,
                                        phys_ptr, attrs, prot, fsr);
+#ifdef HPSC
+        } else if (arm_feature(env, ARM_FEATURE_V8R)) {
+            /* PMSAv8 */
+            ret = get_phys_addr_pmsav8(env, address, access_type, mmu_idx,
+                                       phys_ptr, attrs, prot, fsr);
+#endif
         } else if (arm_feature(env, ARM_FEATURE_V7)) {
             /* PMSAv7 */
             ret = get_phys_addr_pmsav7(env, address, access_type, mmu_idx,
