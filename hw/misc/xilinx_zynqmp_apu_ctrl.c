@@ -131,6 +131,8 @@ static void zynqmp_apu_reset(DeviceState *dev)
 
 static void zynqmp_apu_rvbar_post_write(DepRegisterInfo *reg, uint64_t val)
 {
+#ifdef HPSC
+#else
     ZynqMPAPU *s = ZYNQMP_APU(reg->opaque);
     int i;
 
@@ -143,6 +145,7 @@ static void zynqmp_apu_rvbar_post_write(DepRegisterInfo *reg, uint64_t val)
             DB_PRINT("Set RVBAR %d to %" PRIx64 "\n", i, rvbar);
         }
     }
+#endif
 }
 
 static void zynqmp_apu_pwrctl_post_write(DepRegisterInfo *reg, uint64_t val)
