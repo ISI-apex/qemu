@@ -38,6 +38,7 @@
 #include "hw/fdt_generic_util.h"
 
 #define HPSC_R52
+#define HPSC_M4F
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
 {
     ARMCPU *cpu = ARM_CPU(cs);
@@ -1420,6 +1421,20 @@ static void cortex_m4_initfn(Object *obj)
     cpu->pmsav7_dregion = 8;
 }
 
+#ifdef HPSC_M4F
+static void cortex_m4f_initfn(Object *obj)
+{
+    ARMCPU *cpu = ARM_CPU(obj);
+
+    set_feature(&cpu->env, ARM_FEATURE_V7);
+    set_feature(&cpu->env, ARM_FEATURE_M);
+    set_feature(&cpu->env, ARM_FEATURE_THUMB_DSP);
+    set_feature(&cpu->env, ARM_FEATURE_VFP4);
+    cpu->midr = 0x410fc240; /* r0p0 */
+    cpu->pmsav7_dregion = 8;
+}
+#endif
+
 static void arm_v7m_class_init(ObjectClass *oc, void *data)
 {
     CPUClass *cc = CPU_CLASS(oc);
@@ -1520,6 +1535,44 @@ static void cortex_r5f_initfn(Object *obj)
 
 #ifdef HPSC_R52
 static void cortex_r52_initfn(Object *obj)
+{
+    ARMCPU *cpu = ARM_CPU(obj);
+
+    set_feature(&cpu->env, ARM_FEATURE_V8R);
+    set_feature(&cpu->env, ARM_FEATURE_THUMB_DIV);
+    set_feature(&cpu->env, ARM_FEATURE_ARM_DIV);
+    set_feature(&cpu->env, ARM_FEATURE_NEON);
+    set_feature(&cpu->env, ARM_FEATURE_EL2);
+    set_feature(&cpu->env, ARM_FEATURE_PMSA);
+    set_feature(&cpu->env, ARM_FEATURE_MPIDR);
+    set_feature(&cpu->env, ARM_FEATURE_PMU);	/* DK added: R52 supports it, I'm not sure if Qemu supports that */
+    cpu->midr = 0x410FD130 ; /* r1p3 */
+    cpu->revidr = 0x00000000;
+    cpu->mvfr0 = 0x10110222;
+    cpu->mvfr1 = 0x12111111;
+    cpu->mvfr2 = 0x00000043;
+    cpu->ctr = 0x8144c004;
+    cpu->id_pfr0 = 0x00000131;
+    cpu->id_pfr1 = 0x10111001;
+    cpu->id_dfr0 = 0x03010006;
+    cpu->id_afr0 = 0x00000000;
+    cpu->id_mmfr0 = 0x00211040;
+    cpu->id_mmfr1 = 0x40000000;
+    cpu->id_mmfr2 = 0x01200000;
+    cpu->id_mmfr3 = 0xF0102211;
+    cpu->id_isar0 = 0x02101110;
+    cpu->id_isar1 = 0x13112111;
+    cpu->id_isar2 = 0x21232142;
+    cpu->id_isar3 = 0x01112131;
+    cpu->id_isar4 = 0x00010142;
+    cpu->id_isar5 = 0x00010001;
+    cpu->mp_is_up = true;
+    cpu->pmsav7_dregion = 16; /* DK: can be more than that because the region can be more flexible */
+    cpu->reset_sctlr = 0x30c50838;
+//    define_arm_cp_regs(cpu, cortexr52_cp_reginfo);
+}
+
+static void cortex_r52f_initfn(Object *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1999,11 +2052,16 @@ static const ARMCPUInfo arm_cpus[] = {
                              .class_init = arm_v7m_class_init },
     { .name = "cortex-m4",   .initfn = cortex_m4_initfn,
                              .class_init = arm_v7m_class_init },
+#ifdef HPSC_M4F
+    { .name = "cortex-m4f",   .initfn = cortex_m4f_initfn,
+                             .class_init = arm_v7m_class_init },
+#endif
     { .name = "cortex-r4",   .initfn = cortex_r4_initfn },
     { .name = "cortex-r5",   .initfn = cortex_r5_initfn },
     { .name = "cortex-r5f",  .initfn = cortex_r5f_initfn },
 #ifdef HPSC_R52
     { .name = "cortex-r52",   .initfn = cortex_r52_initfn },
+    { .name = "cortex-r52f",   .initfn = cortex_r52f_initfn },
 #endif
     { .name = "cortex-a7",   .initfn = cortex_a7_initfn },
     { .name = "cortex-a8",   .initfn = cortex_a8_initfn },

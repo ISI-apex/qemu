@@ -18,6 +18,7 @@
 
 #define ARM_CPU_FREQ 1000000000 /* FIXME: 1 GHz, should be configurable */
 
+#define HPSC_M4F
 #ifdef HPSC
 #define HPSC_ARM_CP_STATE_BOTH ARM_CP_STATE_AA64
 #else
@@ -7076,6 +7077,30 @@ static void v7m_push_stack(ARMCPU *cpu)
         env->regs[13] -= 4;
         xpsr |= XPSR_SPREALIGN;
     }
+#ifdef HPSC_M4F
+    /* DK: regardless of Lazy stacking setting, just push all FP registers */
+    if (arm_feature(env, ARM_FEATURE_VFP)) {
+        uint32_t fpscr = vfp_get_fpscr(env);
+        v7m_push(env, fpscr);	/* one more entry. But for what? for 64 bit alignment */
+        v7m_push(env, fpscr);
+        v7m_push(env, (env->vfp.regs[15>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[14>>1] & 0xffffffff);
+        v7m_push(env, (env->vfp.regs[13>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[12>>1] & 0xffffffff);
+        v7m_push(env, (env->vfp.regs[11>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[10>>1] & 0xffffffff);
+        v7m_push(env, (env->vfp.regs[9>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[8>>1] & 0xffffffff);
+        v7m_push(env, (env->vfp.regs[7>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[6>>1] & 0xffffffff);
+        v7m_push(env, (env->vfp.regs[5>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[4>>1] & 0xffffffff);
+        v7m_push(env, (env->vfp.regs[3>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[2>>1] & 0xffffffff);
+        v7m_push(env, (env->vfp.regs[1>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, env->vfp.regs[0>>1] & 0xffffffff);
+    }
+#endif
     /* Switch to the handler mode.  */
     v7m_push(env, xpsr);
     v7m_push(env, env->regs[15]);
@@ -7340,6 +7365,7 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
 
         xpsr = ldl_phys(cs->as, frameptr + 0x1c);
 
+
         if (arm_feature(env, ARM_FEATURE_V8)) {
             /* For v8M we have to check whether the xPSR exception field
              * matches the EXCRET value for return to handler/thread
@@ -7365,6 +7391,36 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
 
         /* Commit to consuming the stack frame */
         frameptr += 0x20;
+#ifdef HPSC_M4F
+        if (arm_feature(env, ARM_FEATURE_VFP)) {
+            env->vfp.regs[0>>1]  = ldl_phys(cs->as, frameptr+0x04);
+            env->vfp.regs[0>>1]  <<= 32;
+            env->vfp.regs[0>>1]  |= ldl_phys(cs->as, frameptr+0x00);
+            env->vfp.regs[2>>1]  = ldl_phys(cs->as, frameptr+0x0c);
+            env->vfp.regs[2>>1]  <<= 32;
+            env->vfp.regs[2>>1]  |= ldl_phys(cs->as, frameptr+0x08);
+            env->vfp.regs[4>>1]  = ldl_phys(cs->as, frameptr+0x14);
+            env->vfp.regs[4>>1]  <<= 32;
+            env->vfp.regs[4>>1]  |= ldl_phys(cs->as, frameptr+0x10);
+            env->vfp.regs[6>>1]  = ldl_phys(cs->as, frameptr+0x1c);
+            env->vfp.regs[6>>1]  <<= 32;
+            env->vfp.regs[6>>1]  |= ldl_phys(cs->as, frameptr+0x18);
+            env->vfp.regs[8>>1]  = ldl_phys(cs->as, frameptr+0x24);
+            env->vfp.regs[8>>1]  <<= 32;
+            env->vfp.regs[8>>1]  |= ldl_phys(cs->as, frameptr+0x20);
+            env->vfp.regs[10>>1] = ldl_phys(cs->as, frameptr+0x2c);
+            env->vfp.regs[10>>1] <<= 32;
+            env->vfp.regs[10>>1] |= ldl_phys(cs->as, frameptr+0x28);
+            env->vfp.regs[12>>1] = ldl_phys(cs->as, frameptr+0x34);
+            env->vfp.regs[12>>1] <<= 32;
+            env->vfp.regs[12>>1] |= ldl_phys(cs->as, frameptr+0x30);
+            env->vfp.regs[14>>1] = ldl_phys(cs->as, frameptr+0x3c);
+            env->vfp.regs[14>>1] <<= 32;
+            env->vfp.regs[14>>1] |= ldl_phys(cs->as, frameptr+0x38);
+            vfp_set_fpscr(env, ldl_phys(cs->as, frameptr+0x40));
+            frameptr += 0x48;
+        }
+#endif
         /* Undo stack alignment (the SPREALIGN bit indicates that the original
          * pre-exception SP was not 8-aligned and we added a padding word to
          * align it, so we undo this by ORing in the bit that increases it

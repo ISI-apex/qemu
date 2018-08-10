@@ -37,7 +37,7 @@
 #include "trace-tcg.h"
 #include "exec/log.h"
 
-
+#define HPSC_M4F
 #define ENABLE_ARCH_4T    arm_dc_feature(s, ARM_FEATURE_V4T)
 #define ENABLE_ARCH_5     arm_dc_feature(s, ARM_FEATURE_V5)
 /* currently all emulated v5 cores are also v5TE, so don't bother */
@@ -10575,12 +10575,17 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
     case 6: case 7: case 14: case 15:
         /* Coprocessor.  */
         if (arm_dc_feature(s, ARM_FEATURE_M)) {
+#ifdef HPSC
+            warn_report("FP support for ARM_FEATURE_M is not implemented yet.");
+            /* break; */
+#else
             /* We don't currently implement M profile FP support,
              * so this entire space should give a NOCP fault.
              */
             gen_exception_insn(s, 4, EXCP_NOCP, syn_uncategorized(),
                                default_exception_el(s));
             break;
+#endif
         }
         if (((insn >> 24) & 3) == 3) {
             /* Translate into the equivalent ARM encoding.  */
@@ -12027,6 +12032,12 @@ static int arm_tr_init_disas_context(DisasContextBase *dcbase,
     dc->ns = ARM_TBFLAG_NS(dc->base.tb->flags);
     dc->fp_excp_el = ARM_TBFLAG_FPEXC_EL(dc->base.tb->flags);
     dc->vfp_enabled = ARM_TBFLAG_VFPEN(dc->base.tb->flags);
+#ifdef HPSC_M4F
+    if (arm_feature(env, ARM_FEATURE_VFP)) {
+        dc->fp_excp_el = 0;
+        dc->vfp_enabled = 1;
+    }
+#endif
     dc->vec_len = ARM_TBFLAG_VECLEN(dc->base.tb->flags);
     dc->vec_stride = ARM_TBFLAG_VECSTRIDE(dc->base.tb->flags);
     dc->c15_cpar = ARM_TBFLAG_XSCALE_CPAR(dc->base.tb->flags);
