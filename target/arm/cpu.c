@@ -38,7 +38,6 @@
 #include "hw/fdt_generic_util.h"
 
 #define HPSC_R52
-#define HPSC_M4F
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
 {
     ARMCPU *cpu = ARM_CPU(cs);

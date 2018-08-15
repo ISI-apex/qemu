@@ -7078,26 +7078,34 @@ static void v7m_push_stack(ARMCPU *cpu)
         xpsr |= XPSR_SPREALIGN;
     }
 #ifdef HPSC_M4F
+    if (arm_current_el(env) == 1) { /* thread mode */
+      env->vfp.fpccr |= (1 << 3);
+      env->vfp.fpccr &= ~(1 << 1);
+    } else { /* user mode */
+      env->vfp.fpccr |= (1 << 1);
+      env->vfp.fpccr &= ~(1 << 3);
+    }
     /* DK: regardless of Lazy stacking setting, just push all FP registers */
     if (arm_feature(env, ARM_FEATURE_VFP)) {
         uint32_t fpscr = vfp_get_fpscr(env);
         v7m_push(env, fpscr);	/* one more entry. But for what? for 64 bit alignment */
         v7m_push(env, fpscr);
-        v7m_push(env, (env->vfp.regs[15>>1] & 0xffffffff00000000) >> 32);
+        env->vfp.fpcar = env->regs[13] - 4; /* pointer to S15. Is it correct? */
+        v7m_push(env, (env->vfp.regs[15>>1] >> 32) & 0xffffffff) ;
         v7m_push(env, env->vfp.regs[14>>1] & 0xffffffff);
-        v7m_push(env, (env->vfp.regs[13>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, (env->vfp.regs[13>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[12>>1] & 0xffffffff);
-        v7m_push(env, (env->vfp.regs[11>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, (env->vfp.regs[11>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[10>>1] & 0xffffffff);
-        v7m_push(env, (env->vfp.regs[9>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, (env->vfp.regs[9>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[8>>1] & 0xffffffff);
-        v7m_push(env, (env->vfp.regs[7>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, (env->vfp.regs[7>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[6>>1] & 0xffffffff);
-        v7m_push(env, (env->vfp.regs[5>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, (env->vfp.regs[5>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[4>>1] & 0xffffffff);
-        v7m_push(env, (env->vfp.regs[3>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, (env->vfp.regs[3>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[2>>1] & 0xffffffff);
-        v7m_push(env, (env->vfp.regs[1>>1] & 0xffffffff00000000) >> 32);
+        v7m_push(env, (env->vfp.regs[1>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[0>>1] & 0xffffffff);
     }
 #endif

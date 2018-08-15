@@ -26,6 +26,7 @@
 #include "hw/registerfields.h"
 
 #define HPSC_TRCH
+#define HPSC_M4F
 
 #if defined(TARGET_AARCH64)
   /* AArch64 definitions */
@@ -534,6 +535,13 @@ typedef struct CPUARMState {
          */
         float_status fp_status;
         float_status standard_fp_status;
+#ifdef HPSC_M4F
+        uint32_t cpacr;	/* coprocessor access control register, addr: 0xE000ED88 */
+        uint32_t fpccr;	/* floating-point context control register, addr: 0xE000EF34 */
+        uint32_t fpcar;	/* floating-point context address register, addr: 0xE000EF38 */
+        uint32_t fpdscr; /* floating-point default status control register, addr: 0xE000EF3C */
+        MemoryRegion * mm_m4f; 
+#endif
     } vfp;
     uint64_t exclusive_addr;
     uint64_t exclusive_val;

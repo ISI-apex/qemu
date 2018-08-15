@@ -62,6 +62,13 @@ DEF_HELPER_3(cpsr_write, void, env, i32, i32)
 DEF_HELPER_2(cpsr_write_eret, void, env, i32)
 DEF_HELPER_1(cpsr_read, i32, env)
 
+#ifndef HPSC_M4F
+#define HPSC_M4F
+#endif
+#ifdef HPSC_M4F__
+DEF_HELPER_1(vfp_get_cpacr, i32, env)
+#endif
+#undef HPSC_M4F
 DEF_HELPER_3(v7m_msr, void, env, i32, i32)
 DEF_HELPER_2(v7m_mrs, i32, env, i32)
 

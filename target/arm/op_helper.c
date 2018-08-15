@@ -675,6 +675,13 @@ uint32_t HELPER(get_r13_banked)(CPUARMState *env, uint32_t mode)
     }
 }
 
+#ifdef HPSC_M4F__
+uint32_t HELPER(vfp_get_cpacr)(CPUARMState *env)
+{
+    return env->vft.cpacr;
+}
+#endif
+
 static void msr_mrs_banked_exc_checks(CPUARMState *env, uint32_t tgtmode,
                                       uint32_t regno)
 {

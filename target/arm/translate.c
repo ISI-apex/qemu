@@ -10575,10 +10575,30 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
     case 6: case 7: case 14: case 15:
         /* Coprocessor.  */
         if (arm_dc_feature(s, ARM_FEATURE_M)) {
-#ifdef HPSC
-            warn_report("FP support for ARM_FEATURE_M is not implemented yet.");
-            /* break; */
+#ifdef HPSC_M4F
+         if (arm_dc_feature(s, ARM_FEATURE_VFP4)) {
+           if (!s->vfp_enabled) { 
+              warn_report("FP coprocessor is not enabled"); 
+              gen_exception_insn(s, 4, EXCP_NOCP, syn_uncategorized(),
+                               default_exception_el(s));
+              break;
+           } else {
+             if (s->fp_excp_el > s->current_el) {
+                warn_report("FP instruction cannot be executed at this EL"); 
+                gen_exception_insn(s, 4, EXCP_NOCP, syn_uncategorized(),
+                                 default_exception_el(s));
+                break;
+             }
+           }
+         }
+         else {
+            warn_report("FP coprocessor doesn't exist"); 
+            gen_exception_insn(s, 4, EXCP_NOCP, syn_uncategorized(),
+                               default_exception_el(s));
+            break;
+         }
 #else
+            warn_report("FP support for ARM_FEATURE_M is not implemented yet.");
             /* We don't currently implement M profile FP support,
              * so this entire space should give a NOCP fault.
              */
@@ -12033,9 +12053,20 @@ static int arm_tr_init_disas_context(DisasContextBase *dcbase,
     dc->fp_excp_el = ARM_TBFLAG_FPEXC_EL(dc->base.tb->flags);
     dc->vfp_enabled = ARM_TBFLAG_VFPEN(dc->base.tb->flags);
 #ifdef HPSC_M4F
-    if (arm_feature(env, ARM_FEATURE_VFP)) {
-        dc->fp_excp_el = 0;
-        dc->vfp_enabled = 1;
+    if (arm_feature(env, ARM_FEATURE_V7) && arm_feature(env, ARM_FEATURE_M) ) {
+      if (arm_feature(env, ARM_FEATURE_VFP4)) { /* cortex-m4f */
+        if (((env->vfp.cpacr >> 20) & 1) == 0) 
+            dc->vfp_enabled = 0;
+        else {
+            dc->vfp_enabled = 1;
+            if (((env->vfp.cpacr >> 20) & 1) == 1) 
+                 dc->fp_excp_el = 0;
+            else
+                 dc->fp_excp_el = 1;
+        }
+      } else {
+            dc->vfp_enabled = 0;
+      }
     }
 #endif
     dc->vec_len = ARM_TBFLAG_VECLEN(dc->base.tb->flags);
