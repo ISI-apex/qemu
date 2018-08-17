@@ -5343,12 +5343,16 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         if (!arm_feature(env, ARM_FEATURE_EL3)) {
 #ifdef HPSC
         if (!arm_feature(env, ARM_FEATURE_EL3) && arm_feature(env, ARM_FEATURE_V8R)) {
-          ARMCPRegInfo rvbar = {
-                .name = "RVBAR", .state = ARM_CP_STATE_AA32,
+          ARMCPRegInfo rvbars[] = {
+            {  .name = "RVBAR", .state = ARM_CP_STATE_AA32,
                 .cp = 15, .opc1 = 0, .crn = 12, .crm = 0, .opc2 = 1,
-                .type = ARM_CP_CONST, .access = PL1_R, .resetvalue = cpu->rvbar
+                .type = ARM_CP_CONST, .access = PL1_R, .resetvalue = cpu->rvbar },
+            {  .name = "IMP_CBAR", .state = ARM_CP_STATE_AA32,
+                .cp = 15, .opc1 = 1, .crn = 15, .crm = 3, .opc2 = 0,
+                .type = ARM_CP_CONST, .access = PL1_R, .resetvalue = cpu->cfgperiphbase & 0xFFE00000},
+            REGINFO_SENTINEL
           };
-          define_one_arm_cp_reg(cpu, &rvbar);
+          define_arm_cp_regs(cpu, rvbars);
         }
 #endif
             ARMCPRegInfo rvbar = {

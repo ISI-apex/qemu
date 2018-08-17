@@ -386,6 +386,7 @@ static void nand_command(NANDFlashState *s)
 {
     int i, j;
     unsigned int offset;
+printf("%s: cmd = 0x%x\n", __func__, s->cmd);
     switch (s->cmd) {
     case NAND_CMD_READ0:
         s->iolen = 0;
@@ -759,6 +760,7 @@ uint32_t nand_getio(DeviceState *dev)
     NANDFlashState *s = NAND(dev);
 
     /* Allow sequential reading */
+printf("%s: s->iolen(0x%x), s->gnd(%d), s->addr(0x%lx), s->addr_shift(%d), s->page_shift(%d), s->oob_shift(%d), initial s->offset (0x%x)\n", __func__, s->iolen, s->gnd, s->addr, s->addr_shift, s->page_shift, s->oob_shift, s->offset);
     if (!s->iolen && s->cmd == NAND_CMD_READ0) {
         offset = (int) (s->addr & ((1 << s->addr_shift) - 1)) + s->offset;
         s->offset = 0;
@@ -771,6 +773,7 @@ uint32_t nand_getio(DeviceState *dev)
     }
 
     if (s->ce || s->iolen <= 0) {
+printf("%s: return 0, because s->ce(%d) || s->iolen(%d) <= 0), offset = (0x%x) s->ioaddr[0x%2x, 0x%2x, 0x%2x, 0x%2x]\n", __func__, s->ce, s->iolen, offset, s->ioaddr[0], s->ioaddr[1], s->ioaddr[2], s->ioaddr[3]);
         return 0;
     }
 
@@ -785,6 +788,7 @@ uint32_t nand_getio(DeviceState *dev)
         s->ioaddr += s->buswidth;
         s->iolen  -= s->buswidth;
     }
+printf("%s: return (0x%2x)\n", __func__, x);
     return x;
 }
 

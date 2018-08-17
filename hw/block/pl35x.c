@@ -40,7 +40,7 @@
 #include "sysemu/blockdev.h"
 #endif
 
-//#define PL35X_ERR_DEBUG
+#define PL35X_ERR_DEBUG
 #ifdef PL35X_ERR_DEBUG
 #define DB_PRINT(...) do { \
     fprintf(stderr,  ": %s: ", __func__); \
@@ -74,6 +74,11 @@ typedef struct PL35xState {
 
     /* FIXME: add ECC support */
 
+ 
+    uint32_t configs[10];	/* 0x0, ..., 0x24 */ 
+    uint32_t cycles[8];	/* 0x100, 120, ... 1E0 */ 
+    uint32_t ecc[2][11];	/* 0x300, 304, 308, 30c, 310, 314, .., 328 */ 
+				/* 0x400, 404, 408, 40c, 410, 414, .., 428 */
     uint8_t x; /* the "x" in pl35x */
 } PL35xState;
 
@@ -90,7 +95,6 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     first = 0;
     }
 #endif
-    addr >>= 2;
     switch (addr) {
     case 0x0:
         if (s->itf[0].dev && object_dynamic_cast(OBJECT(s->itf[0].dev),
@@ -104,15 +108,50 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
             r |= (!!rdy) << 6;
         }
         break;
-    case 0x418>>2:
-    case 0x41C>>2:
-    case 0x420>>2:
-    case 0x424>>2:
-	    r = 0x4fffffff;	/* DK: always ECC is valid */
-	    break;
+    case 0x4:
+    case 0x20:
+    case 0x24:
+         r = s->configs[addr >> 2]; 
+#ifdef HPSC
+    case 0x100:
+    case 0x120:
+    case 0x140:
+    case 0x160:
+    case 0x180:
+    case 0x1a0:
+    case 0x1c0:
+    case 0x1e0: {
+	r = s->cycles[(addr & 0xf0) >> 5];
+	break;
+    }
+    case 0x300:
+    case 0x304:
+    case 0x308:
+    case 0x30c:
+    case 0x310:
+    case 0x314:
+    case 0x318:
+    case 0x31c:
+    case 0x320:
+    case 0x324:
+    case 0x328:
+    case 0x400:
+    case 0x404:
+    case 0x408:
+    case 0x40c:
+    case 0x410:
+    case 0x414:
+    case 0x418:
+    case 0x41c:
+    case 0x420:
+    case 0x424:
+    case 0x428:
+        r = s->ecc[(addr &0x400) >> 10][(addr & 0xf) >> 2];
+	break;
+#endif
     default:
         DB_PRINT("Unimplemented SMC read access reg=" TARGET_FMT_plx "\n",
-                 addr * 4);
+                 addr);
         break;
     }
     return r;
@@ -122,10 +161,65 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
                       unsigned int size)
 {
     DB_PRINT("addr=%x v=%x\n", (unsigned)addr, (unsigned)value64);
-    addr >>= 2;
+#ifdef HPSC
+    PL35xState *s = opaque;
+    switch (addr) {
+    case 0x8:
+    case 0xc:
+    case 0x10:
+    case 0x14:
+    case 0x18:
+    case 0x1c:
+    case 0x20:
+    case 0x24:
+         s->configs[addr >> 2] = value64;
+        break;
+    case 0x100:
+    case 0x120:
+    case 0x140:
+    case 0x160:
+    case 0x180:
+    case 0x1a0:
+    case 0x1c0:
+    case 0x1e0: {
+	s->cycles[(addr & 0xf0) >> 5] = value64;
+	break;
+    }
+    case 0x300:
+    case 0x304:
+    case 0x308:
+    case 0x30c:
+    case 0x310:
+    case 0x314:
+    case 0x318:
+    case 0x31c:
+    case 0x320:
+    case 0x324:
+    case 0x328:
+    case 0x400:
+    case 0x404:
+    case 0x408:
+    case 0x40c:
+    case 0x410:
+    case 0x414:
+    case 0x418:
+    case 0x41c:
+    case 0x420:
+    case 0x424:
+    case 0x428: {
+        s->ecc[(addr &0x400) >> 10][(addr & 0xf) >> 2] = value64;
+	break;
+    }
+    default:
+        DB_PRINT("Unimplemented SMC read access reg=" TARGET_FMT_plx "\n",
+                 addr);
+        break;
+    }
+#else
     /* FIXME: implement */
     DB_PRINT("Unimplemented SMC write access reg=" TARGET_FMT_plx "\n",
-                 addr * 4);
+                 addr);
+#endif
 }
 
 static const MemoryRegionOps pl35x_ops = {
@@ -167,13 +261,15 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     uint32_t value = value64;
     uint32_t nandaddr = value;
 
-    DB_PRINT("addr=%x v=%x size=%d\n", (unsigned)addr, (unsigned)value, size);
 
     /* Decode the various signals.  */
     data_phase = (addr >> 19) & 1;
     ecmd_valid = (addr >> 20) & 1;
     start_cmd = (addr >> 3) & 0xff;
     end_cmd = (addr >> 11) & 0xff;
+
+    DB_PRINT("addr=%x v=%x size=%d, data_phase(0x%x), ecmd_vali(0x%x), start_cmd(0x%x), end_cmd(0x%x)\n", (unsigned)addr, (unsigned)value, size, data_phase, ecmd_valid, start_cmd, end_cmd);
+
     if (!data_phase) {
         addr_cycles = (addr >> 21) & 7;
     }
@@ -185,6 +281,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
 
     /* Writing data to the NAND.  */
     if (data_phase) {
+    DB_PRINT("writing data to NAND\n");
         nand_setpins(s->dev, 0, 0, 0, 1, 0);
         while (size--) {
             nand_setio(s->dev, value & 0xff);
@@ -194,6 +291,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
 
     /* Writing Start cmd.  */
     if (!data_phase && !s->nand_pending_addr_cycles) {
+    DB_PRINT("writing Start cmd \n");
         nand_setpins(s->dev, 1, 0, 0, 1, 0);
         nand_setio(s->dev, start_cmd);
     }
@@ -219,6 +317,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
 
     /* Writing commands. One or two (Start and End).  */
     if (ecmd_valid && !s->nand_pending_addr_cycles) {
+    DB_PRINT("writing commands. One or two (Start and End)\n");
         nand_setpins(s->dev, 1, 0, 0, 1, 0);
         nand_setio(s->dev, end_cmd);
     }
@@ -265,6 +364,8 @@ static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
         itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
                                NAND_MFR_MICRON, 0x44);
 #endif
+    } else {
+	return;
     }
 #endif
     assert(object_dynamic_cast(OBJECT(itf->dev), "nand"));

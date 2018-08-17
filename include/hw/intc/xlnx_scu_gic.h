@@ -25,7 +25,11 @@
 #ifndef XLNX_SCU_GIC_H
 #define XLNX_SCU_GIC_H
 
+#ifdef HPSC
+#include "arm_gicv3_common.h"
+#else
 #include "arm_gic.h"
+#endif
 
 #define TYPE_XLNX_SCU_GIC "xlnx,zynqmp-scugic"
 
@@ -41,8 +45,11 @@
 
 struct XlnxSCUGICState {
     /*< private >*/
+#ifdef HPSC
+    GICv3State parent;
+#else
     GICState parent;
-
+#endif
     /*< public >*/
     uint32_t intr_inj[XLNX_SCU_GIC_MAX_INJECTOR][XLNX_SCU_GIC_IRQ_REG];
     uint32_t ext_level[XLNX_SCU_GIC_IRQ_REG];
@@ -52,7 +59,11 @@ typedef struct XlnxSCUGICState XlnxSCUGICState;
 
 struct XlnxSCUGICClass {
     /*< private >*/
+#ifdef HPSC
+    ARMGICv3CommonClass parent_class;
+#else
     ARMGICClass parent_class;
+#endif
 
     /*< public >*/
     qemu_irq_handler parent_irq_handler;

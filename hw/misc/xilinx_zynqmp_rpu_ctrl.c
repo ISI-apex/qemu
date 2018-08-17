@@ -395,7 +395,6 @@ typedef struct XlnxZynqMPRPUCtrl {
 
     /* GIC associated to the RPUs. */
     XlnxSCUGICState *gic;
-
     /* WFIs towards PMU. */
     qemu_irq wfi_out[2];
     /* Comparators fault. */

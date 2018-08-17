@@ -27,6 +27,7 @@
 #include "hw/sysbus.h"
 #include "hw/intc/arm_gic_common.h"
 
+#define HPSC
 /*
  * Maximum number of possible interrupts, determined by the GIC architecture.
  * Note that this does not include LPIs. When implemented, these should be
@@ -217,6 +218,9 @@ struct GICv3State {
     uint32_t revision;
     bool security_extn;
     bool irq_reset_nonsecure;
+#ifdef HPSC
+    uint32_t cpu_start_id; /* IDs of CPUs connected to the GIC */
+#endif
 
     int dev_fd; /* kvm device fd if backed by kvm vgic support */
     Error *migration_blocker;

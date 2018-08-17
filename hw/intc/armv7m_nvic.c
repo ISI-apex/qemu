@@ -1682,6 +1682,24 @@ static MemTxResult nvic_sysreg_read(void *opaque, hwaddr addr,
             val = deposit32(val, i * 8, 8, get_prio(s, hdlidx, sbank));
         }
         break;
+#ifdef HPSC_M4F
+    case 0xd88:
+    case 0xf30 ... 0xf44: /* System Handler Priority (SHPR1, SHPR2, SHPR3) */
+        {
+        CPUARMState *env = &s->cpu->env;
+        switch (offset) {
+           case 0xd88:
+             val = env->vfp.cpacr;
+           case 0xf34:
+             val = env->vfp.fpccr;
+           case 0xf38:
+             val = env->vfp.fpcar;
+           case 0xf3c:
+             val = env->vfp.fpdscr;
+        } 
+        break;
+        }
+#endif
     case 0xfe0 ... 0xfff: /* ID.  */
         if (offset & 3) {
             val = 0;
@@ -1780,6 +1798,24 @@ static MemTxResult nvic_sysreg_write(void *opaque, hwaddr addr,
         }
         nvic_irq_update(s);
         return MEMTX_OK;
+#ifdef HPSC_M4F
+    case 0xd88:
+    case 0xf30 ... 0xf44: /* System Handler Priority (SHPR1, SHPR2, SHPR3) */
+        {
+        CPUARMState *env = &s->cpu->env;
+        switch (offset) {
+           case 0xd88:
+             env->vfp.cpacr = value; break;
+           case 0xf34:
+             env->vfp.fpccr = value; break;
+           case 0xf38:
+             env->vfp.fpcar = value; break;
+           case 0xf3c:
+             env->vfp.fpdscr = value; break;
+        } 
+        break;
+        }
+#endif
     }
     if (size == 4) {
         nvic_writel(s, offset, value, attrs);

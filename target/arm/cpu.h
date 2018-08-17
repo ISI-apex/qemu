@@ -823,6 +823,9 @@ struct ARMCPU {
     /* DCZ blocksize, in log_2(words), ie low 4 bits of DCZID_EL0 */
     uint32_t dcz_blocksize;
     uint64_t rvbar;
+#ifdef HPSC
+    uint32_t cfgperiphbase;
+#endif
     int pe;
 
     /* Configurable aspects of GIC cpu interface (which is part of the CPU) */
