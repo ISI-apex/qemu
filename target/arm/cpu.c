@@ -1184,13 +1184,16 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
         if (!cpu->secure_memory) {
             cpu->secure_memory = cs->memory;
         }
-        address_space_init(as, cpu->secure_memory, "cpu-secure-memory");
+        char *as_s_name = g_strdup_printf("cpu-secure-memory-%s", cs->parent_obj.id);
+        address_space_init(as, cpu->secure_memory, as_s_name);
         cpu_address_space_init(cs, as, ARMASIdx_S);
     } else {
         cs->num_ases = 1;
     }
     as = g_new0(AddressSpace, 1);
-    address_space_init(as, cs->memory, "cpu-memory");
+
+    char *as_ns_name = g_strdup_printf("cpu-memory-%s", cs->parent_obj.id);
+    address_space_init(as, cs->memory, as_ns_name);
     cpu_address_space_init(cs, as, ARMASIdx_NS);
 
     /* No core_count specified, default to smp_cpus. */
