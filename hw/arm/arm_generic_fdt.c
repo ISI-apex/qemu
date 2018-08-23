@@ -306,7 +306,8 @@ static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
                  * what we are looking at is the same as the main memory@0 node
                  * we just found above.
                  */
-                if (mem_container != qemu_fdt_get_phandle(fdt, node_path)) {
+                if (qemu_fdt_check_phandle(fdt, node_path) &&
+                    mem_container != qemu_fdt_get_phandle(fdt, node_path)) {
                     continue;
                 }
 
