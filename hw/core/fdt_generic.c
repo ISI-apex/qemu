@@ -30,7 +30,7 @@
 #include "qemu/log.h"
 
 #ifndef FDT_GENERIC_ERR_DEBUG
-#define FDT_GENERIC_ERR_DEBUG 0
+#define FDT_GENERIC_ERR_DEBUG 1
 #endif
 #define DB_PRINT(lvl, ...) do { \
     if (FDT_GENERIC_ERR_DEBUG > (lvl)) { \
