@@ -1060,15 +1060,6 @@ static void flatviews_reset(void)
     QTAILQ_FOREACH(as, &address_spaces, address_spaces_link) {
         MemoryRegion *physmr = memory_region_get_flatview_root(as->root);
 
-#if 1
-	//if (!nvic_region->container && as->root == get_system_memory())
-	//if (!nvic_region->container && physmr == (MemoryRegion *)0x55555709d400) {
-	if (!nvic_region->container && physmr == (MemoryRegion *)0x55555731dc20) {
-        	//memory_region_add_subregion_overlap(physmr, 0xe000e000, nvic_region, 100);
-        	memory_region_add_subregion(physmr, 0xe000e000, nvic_region);
-	}
-#endif
-
         if (g_hash_table_lookup(flat_views, physmr)) {
             continue;
         }
