@@ -3402,9 +3402,9 @@ static bool memory_region_parse_reg(FDTGenericMMap *obj,
     }
 
     if (total_size != max_addr - base_addr) {
-        return false;
         error_setg(errp, "FDT generic memory parse does not "
                    "spport discontiguous or overlapping memory regions");
+        return false;
     }
 
     /* FIXME: parent should not be optional but we need to implement
