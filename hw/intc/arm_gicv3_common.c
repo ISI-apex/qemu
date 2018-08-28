@@ -304,7 +304,11 @@ static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
     s->cpu = g_new0(GICv3CPUState, s->num_cpu);
 
     for (i = 0; i < s->num_cpu; i++) {
+#ifdef HPSC
+        CPUState *cpu = qemu_get_cpu(i + s->cpu_start_id);
+#else
         CPUState *cpu = qemu_get_cpu(i);
+#endif
         uint64_t cpu_affid;
         int last;
 

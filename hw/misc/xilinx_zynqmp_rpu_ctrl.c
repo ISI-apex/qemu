@@ -43,6 +43,10 @@
 
 #define TYPE_XLNX_RPU_CTRL "xlnx.rpu-control"
 
+#define HPSC_R52
+#ifdef HPSC_R52
+#include "hw/intc/arm_gicv3.h"
+#endif
 #define XLNX_RPU_CTRL(obj) \
      OBJECT_CHECK(XlnxZynqMPRPUCtrl, (obj), TYPE_XLNX_RPU_CTRL)
 
@@ -394,7 +398,11 @@ typedef struct XlnxZynqMPRPUCtrl {
     MemoryRegion *ddr;
 
     /* GIC associated to the RPUs. */
+#ifdef HPSC_R52
+    GICv3State *gic;
+#else
     XlnxSCUGICState *gic;
+#endif
     /* WFIs towards PMU. */
     qemu_irq wfi_out[2];
     /* Comparators fault. */
@@ -433,9 +441,10 @@ static void rpu_1_isr_postw(RegisterInfo *reg, uint64_t val64)
     rpu_1_update_irq(s);
 }
 
+#ifdef HPSC_R52__
 static void ronaldo_rpu_update_irq_injection(RegisterInfo *reg, uint64_t val)
 {
-    XlnxZynqMPRPUCtrl *s = XLNX_RPU_CTRL(reg->opaque);
+    GICv3State *s = (reg->opaque);
 
     uint8_t bank = INT_INJ_BANK_FROM_OFFSET(reg->access->addr >> 2);
     uint32_t irqs = s->regs[R_RPU_INTR(bank)] &
@@ -443,6 +452,19 @@ static void ronaldo_rpu_update_irq_injection(RegisterInfo *reg, uint64_t val)
 
     xlnx_scu_gic_set_intr(s->gic, bank, irqs, 0);
 }
+#else
+static void ronaldo_rpu_update_irq_injection(RegisterInfo *reg, uint64_t val)
+{
+#ifdef ORG
+    XlnxZynqMPRPUCtrl *s = XLNX_RPU_CTRL(reg->opaque);
+
+    uint8_t bank = INT_INJ_BANK_FROM_OFFSET(reg->access->addr >> 2);
+    uint32_t irqs = s->regs[R_RPU_INTR(bank)] &
+                    s->regs[R_RPU_INTR_MASK(bank)];
+    xlnx_scu_gic_set_intr(s->gic, bank, irqs, 0);
+#endif
+}
+#endif
 
 static uint64_t rpu_1_ien_prew(RegisterInfo *reg, uint64_t val64)
 {
@@ -899,7 +921,11 @@ static void rpu_init(Object *obj)
     /* Link to the GIC which allow to inject irq through rpu_intr/rpu_mask
      * registers
      */
+#ifdef HPSC_R52
+    object_property_add_link(obj, "gic-for-rpu", TYPE_ARM_GICV3,
+#else
     object_property_add_link(obj, "gic-for-rpu", TYPE_XLNX_SCU_GIC,
+#endif
                              (Object **)&s->gic,
                              qdev_prop_allow_set_link_before_realize,
                              OBJ_PROP_LINK_UNREF_ON_RELEASE,

@@ -241,11 +241,13 @@ static uint64_t mutex_prew(DepRegisterInfo *reg, uint64_t val64)
 /* RPU, APU IRQ injection callbacks. */
 static void lpd_slcr_peripheral_irq_update(LPD_SLCR *s, uint8_t bank)
 {
-#ifdef RPU_IMPL
+#ifdef RPU_IMPL__
     xlnx_scu_gic_set_intr(s->rpu_gic, bank, s->regs[GIC_IRQ_STATUS(bank)], 1);
 #endif
+#ifdef ORG
     xlnx_scu_gic_set_intr(s->apu_gic, bank, s->regs[GIC_IRQ_STATUS(bank)], 1);
-#ifdef HPSC_TRCH
+#endif
+#ifdef HPSC_TRCH__
     xlnx_scu_gic_set_intr(s->trch_gic, bank, s->regs[GIC_IRQ_STATUS(bank)], 1);
 #endif
 }

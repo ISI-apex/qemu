@@ -62,6 +62,7 @@ static void xlnx_scu_gic_set_irq(void *opaque, int irq, int level)
     agc->parent_irq_handler(opaque, irq, level);
 }
 
+#ifdef ORG
 static void xlnx_scu_gic_update_irq(XlnxSCUGICState *s, unsigned int reg)
 {
     XlnxSCUGICClass *agc = XLNX_SCU_GIC_GET_CLASS(s);
@@ -83,6 +84,7 @@ void xlnx_scu_gic_set_intr(XlnxSCUGICState *s, unsigned int reg, uint32_t val,
     s->intr_inj[injector][reg] = val;
     xlnx_scu_gic_update_irq(s, reg);
 }
+#endif
 
 static void xlnx_scu_gic_class_init(ObjectClass *klass, void *data)
 {
