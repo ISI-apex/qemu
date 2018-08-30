@@ -92,6 +92,10 @@ enum {
     M_REG_NUM_BANKS = 2,
 };
 
+#ifdef HPSC
+#define NUM_MPU_REGIONS 24
+#endif
+
 /* ARM-specific interrupt pending bits.  */
 #define CPU_INTERRUPT_FIQ   CPU_INTERRUPT_TGT_EXT_1
 #define CPU_INTERRUPT_VIRQ  CPU_INTERRUPT_TGT_EXT_2
@@ -319,6 +323,9 @@ typedef struct CPUARMState {
             };
             uint64_t far_el[4];
         };
+#ifdef HPSC
+        uint64_t hifar_el2;
+#endif
         uint64_t hpfar_el2;
         uint64_t hstr_el2;
         union { /* Translation result. */
@@ -431,13 +438,6 @@ typedef struct CPUARMState {
         uint64_t vpidr_el2; /* Virtualization Processor ID Register */
         uint64_t vmpidr_el2; /* Virtualization Multiprocessor ID Register */
 
-#ifdef HPSC
-        uint32_t prselr;
-        uint64_t prbar;
-        uint64_t prlar;
-        uint64_t prbar_n[16];
-        uint64_t prlar_n[16];
-#endif
     } cp15;
 
     struct {
@@ -609,14 +609,21 @@ typedef struct CPUARMState {
          *  pmsav7.rnr (region number register)
          *  pmsav7_dregion (number of configured regions)
          */
-        uint32_t prbar[16];
-        uint32_t prlar[16];
-        uint32_t hprbar[16];
-        uint32_t hprlar[16];
+        uint32_t prbar[NUM_MPU_REGIONS];
+        uint32_t prlar[NUM_MPU_REGIONS];
+        uint32_t hprbar[NUM_MPU_REGIONS];
+        uint32_t hprlar[NUM_MPU_REGIONS];
         uint32_t mair0[2];	/* mair0, hmair0 */
         uint32_t mair1[2];	/* mair1, hmair1 */
         uint32_t amair0[2];	/* amair1, ahmair1 */
         uint32_t amair1[2];	/* amair1, ahmair1 */
+        uint64_t prselr;
+        uint64_t prbar_direct;
+        uint64_t prlar_direct;
+        uint64_t hprselr;
+        uint64_t hprbar_direct;
+        uint64_t hprlar_direct;
+        uint64_t hprenr;
     } pmsav8r;
 
     /* v8M SAU */
@@ -741,6 +748,9 @@ struct ARMCPU {
     bool has_mpu;
     /* PMSAv7 MPU number of supported regions */
     uint32_t pmsav7_dregion;
+#ifdef HPSC
+    uint32_t pmsav8r_hdregion;
+#endif
     /* v8M SAU number of supported regions */
     uint32_t sau_sregion;
 
