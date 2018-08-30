@@ -634,9 +634,13 @@ typedef struct CPUARMState {
         uint32_t ctrl;
     } sau;
 
-#ifdef HPSC__
+#ifdef HPSC
     struct {
         uint32_t tcmregion[3];
+        uint32_t imp_csctlr;
+        uint32_t imp_bpctlr;
+        uint32_t imp_memprotctlr;
+        uint32_t imp_slavepctlr;
     } v8r;
 #endif
     void *nvic;
