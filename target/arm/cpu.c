@@ -2080,6 +2080,8 @@ static Property arm_cpu_properties[] = {
 #ifdef HPSC
     DEFINE_PROP_UINT64("rvbar", ARMCPU, rvbar, 0),
     DEFINE_PROP_UINT32("cfgperiphbase", ARMCPU, cfgperiphbase, 0),
+    DEFINE_PROP_UINT32("buildoptr", ARMCPU, imp_buildoptr, 0),
+    DEFINE_PROP_UINT32("pinoptr", ARMCPU, imp_pinoptr, 0),
     DEFINE_PROP_UINT32("atcmregionr", ARMCPU, tcmregion[0], 0),
     DEFINE_PROP_UINT32("btcmregionr", ARMCPU, tcmregion[1], 0),
     DEFINE_PROP_UINT32("ctcmregionr", ARMCPU, tcmregion[2], 0),

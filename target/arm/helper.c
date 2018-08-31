@@ -828,7 +828,14 @@ static const ARMCPRegInfo cp_reginfo[] = {
      * non-secure case, the 32-bit register will have reset and migration
      * disabled during registration as it is handled by the 64-bit instance.
      */
-    { .name = "CONTEXTIDR_EL1", .state = ARM_CP_STATE_BOTH,
+#ifdef HPSC
+    { .name = "CONTEXTIDR_EL1", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 13, .crm = 0, .opc2 = 1,
+      .access = PL1_RW, .secure = ARM_CP_SECSTATE_NS,
+      .fieldoffset = offsetof(CPUARMState, cp15.contextidr_el[1]),
+      .resetvalue = 0, .writefn = contextidr_write, .raw_writefn = raw_write, },
+#endif
+    { .name = "CONTEXTIDR_EL1", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 0, .crn = 13, .crm = 0, .opc2 = 1,
       .access = PL1_RW, .secure = ARM_CP_SECSTATE_NS,
       .fieldoffset = offsetof(CPUARMState, cp15.contextidr_el[1]),
@@ -1183,7 +1190,29 @@ static CPAccessResult hmair_v8r_access (CPUARMState *env, const ARMCPRegInfo *ri
     return CP_ACCESS_OK;
 }
 
-static CPAccessResult hstr_v8r_access (CPUARMState *env, const ARMCPRegInfo *ri,
+static CPAccessResult hstr_t1_access (CPUARMState *env, const ARMCPRegInfo *ri,
+                                     bool isread)
+{
+    /* Only accessible in EL1 if SCTLR.UCT is set (and only in AArch64,
+     * but the AArch32 CTR has its own reginfo struct)
+     */
+    if (!arm_feature(env, ARM_FEATURE_V8R)) {
+      if (arm_current_el(env) >= 2) return CP_ACCESS_OK;
+      return CP_ACCESS_TRAP;
+    }
+    switch (arm_current_el(env)) {
+       case 0: return CP_ACCESS_TRAP;
+       case 1:
+               if (env->cp15.hstr_el2 & (1 << 1))
+                 return CP_ACCESS_TRAP_EL2;
+               return CP_ACCESS_TRAP;
+       default: 
+               break;
+    }
+    return CP_ACCESS_OK;
+}
+
+static CPAccessResult hstr_t12_access (CPUARMState *env, const ARMCPRegInfo *ri,
                                      bool isread)
 {
     /* Only accessible in EL1 if SCTLR.UCT is set (and only in AArch64,
@@ -1197,6 +1226,28 @@ static CPAccessResult hstr_v8r_access (CPUARMState *env, const ARMCPRegInfo *ri,
        case 0: return CP_ACCESS_TRAP;
        case 1:
                if (env->cp15.hstr_el2 & (1 << 12))
+                 return CP_ACCESS_TRAP_EL2;
+               return CP_ACCESS_TRAP;
+       default: 
+               break;
+    }
+    return CP_ACCESS_OK;
+}
+
+static CPAccessResult hstr_t13_access (CPUARMState *env, const ARMCPRegInfo *ri,
+                                     bool isread)
+{
+    /* Only accessible in EL1 if SCTLR.UCT is set (and only in AArch64,
+     * but the AArch32 CTR has its own reginfo struct)
+     */
+    if (!arm_feature(env, ARM_FEATURE_V8R)) {
+      if (arm_current_el(env) >= 2) return CP_ACCESS_OK;
+      return CP_ACCESS_TRAP;
+    }
+    switch (arm_current_el(env)) {
+       case 0: return CP_ACCESS_TRAP;
+       case 1:
+               if (env->cp15.hstr_el2 & (1 << 13))
                  return CP_ACCESS_TRAP_EL2;
                return CP_ACCESS_TRAP;
        default: 
@@ -1667,6 +1718,13 @@ static const ARMCPRegInfo v7_cp_reginfo[] = {
       .access = PL0_RW, .accessfn = pmreg_access_ccntr,
       .type = ARM_CP_IO,
       .readfn = pmccntr_read, .writefn = pmccntr_write, },
+    { .name = "PMCCFILTR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 3, .crn = 14, .crm = 15, .opc2 = 7,
+      .writefn = pmccfiltr_write,
+      .access = PL0_RW, .accessfn = pmreg_access,
+      .type = ARM_CP_IO,
+      .fieldoffset = offsetof(CPUARMState, cp15.pmccfiltr_el0),
+      .resetvalue = 0, },
 #endif
     { .name = "PMCCFILTR_EL0", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 3, .crn = 14, .crm = 15, .opc2 = 7,
@@ -1794,7 +1852,7 @@ static const ARMCPRegInfo v7_cp_reginfo[] = {
 #ifdef HPSC
     { .name = "ISR", .state = ARM_CP_STATE_AA32,
       .cp = 15, .opc1 = 0, .crn = 12, .crm = 1, .opc2 = 0,
-      .type = ARM_CP_NO_RAW, .access = PL1_R, .accessfn = hstr_v8r_access, .readfn = isr_read },
+      .type = ARM_CP_NO_RAW, .access = PL1_R, .accessfn = hstr_t12_access, .readfn = isr_read },
 #endif
     { .name = "ISR_EL1", .state = HPSC_ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 0, .crn = 12, .crm = 1, .opc2 = 0,
@@ -4265,6 +4323,13 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
     { .name = "HVBAR", .state = ARM_CP_STATE_AA32,
       .cp = 15, .opc1 = 4, .crn = 12, .crm = 0, .opc2 = 0,
       .access = PL2_RW, .writefn = vbar_write,
+      .accessfn = hstr_t12_access,
+      .fieldoffset = offsetof(CPUARMState, cp15.vbar_el[2]),
+      .resetvalue = 0 },
+    { .name = "HRMR", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 4, .crn = 12, .crm = 0, .opc2 = 2,
+      .access = PL2_RW, .writefn = vbar_write,
+      .accessfn = hstr_t12_access,
       .fieldoffset = offsetof(CPUARMState, cp15.vbar_el[2]),
       .resetvalue = 0 },
 #endif
@@ -4375,6 +4440,7 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
     { .name = "HTPIDR", .state = ARM_CP_STATE_AA32,
       .cp = 15, .opc1 = 4, .crn = 13, .crm = 0, .opc2 = 2,
       .access = PL2_RW, .resetvalue = 0,
+      .accessfn = hstr_t13_access,
       .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[2]) },
     { .name = "VSCTLR", .state = ARM_CP_STATE_AA32,
       .cp = 15, .opc1 = 4, .crn = 2, .crm = 0, .opc2 = 0,
@@ -4706,6 +4772,26 @@ static CPAccessResult hcr_tidcp_access(CPUARMState *env, const ARMCPRegInfo *ri,
        case 0: return CP_ACCESS_TRAP;
        case 1:
                if (env->cp15.hcr_el2 & HCR_TIDCP)
+                 return CP_ACCESS_TRAP_EL2;
+               break;
+       default: 
+               break;
+    }
+    return CP_ACCESS_OK;
+}
+
+static CPAccessResult hcr_tidcp_peripheretionr_access(CPUARMState *env, const ARMCPRegInfo *ri,
+                                     bool isread)
+{
+    /* Only accessible in EL1 if SCTLR.UCT is set (and only in AArch64,
+     * but the AArch32 CTR has its own reginfo struct)
+     */
+    switch (arm_current_el(env)) {
+       case 0: return CP_ACCESS_TRAP;
+       case 1:
+               if (env->cp15.hcr_el2 & HCR_TIDCP)
+                 return CP_ACCESS_TRAP_EL2;
+               if (!isread && (env->v8r.hactlr & (1 << 8))) /* PERIPHPREGIONR: 8 */
                  return CP_ACCESS_TRAP_EL2;
                break;
        default: 
@@ -5634,7 +5720,8 @@ void register_cp_regs_for_features(ARMCPU *cpu)
                 .type = ARM_CP_CONST, .access = PL2_R, .resetvalue = cpu->rvbar },
             {  .name = "IMP_CBAR", .state = ARM_CP_STATE_AA32,
                 .cp = 15, .opc1 = 1, .crn = 15, .crm = 3, .opc2 = 0,
-                .type = ARM_CP_CONST, .access = PL1_R, .resetvalue = cpu->cfgperiphbase & 0xFFE00000},
+                .type = ARM_CP_CONST, .access = PL1_R | PL2_R, 
+                .resetvalue = cpu->cfgperiphbase & 0xFFE00000},
             REGINFO_SENTINEL
           };
           define_arm_cp_regs(cpu, rvbars);
@@ -5853,6 +5940,57 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .access = PL1_R, .type = ARM_CP_CONST, .resetvalue = cpu->revidr },
             REGINFO_SENTINEL
         };
+        ARMCPRegInfo id_v8r_ich_reginfo[] = {
+            { .name = "ICH_LR0", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 12, .opc2 = 0,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lr[0]),
+              .resetvalue = 0 },
+            { .name = "ICH_LR1", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 12, .opc2 = 1,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lr[1]),
+              .resetvalue = 0 },
+            { .name = "ICH_LR2", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 12, .opc2 = 2,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lr[2]),
+              .resetvalue = 0 },
+            { .name = "ICH_LR3", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 12, .opc2 = 3,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lr[2]),
+              .resetvalue = 0 },
+            { .name = "ICH_LRC0", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 14, .opc2 = 0,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lrc[0]),
+              .resetvalue = 0 },
+            { .name = "ICH_LRC1", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 14, .opc2 = 1,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lrc[1]),
+              .resetvalue = 0 },
+            { .name = "ICH_LRC2", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 14, .opc2 = 2,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lrc[2]),
+              .resetvalue = 0 },
+            { .name = "ICH_LRC3", .state = ARM_CP_STATE_AA32,
+              .cp = 15, .opc1 = 4, .crn = 12, .crm = 14, .opc2 = 3,
+              .access = PL2_RW, .writefn = vbar_write,
+              .accessfn = hstr_t12_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.ich_lrc[2]),
+              .resetvalue = 0 },
+            REGINFO_SENTINEL
+        };
 #endif
         ARMCPRegInfo id_cp_reginfo[] = {
             /* These are common to v8 and pre-v8 */
@@ -5920,6 +6058,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
 #ifdef HPSC
         else if (arm_feature(env, ARM_FEATURE_V8R)) {
             define_arm_cp_regs(cpu, id_v8r_midr_cp_reginfo);
+            define_arm_cp_regs(cpu, id_v8r_ich_reginfo);
         }
 #endif
         else {
@@ -5951,7 +6090,8 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .resetvalue = cpu->reset_auxcr },
             { .name = "HACTLR", .state = ARM_CP_STATE_AA32,
               .cp = 15, .opc1 = 4, .crn = 1, .crm = 0, .opc2 = 1,
-              .access = PL2_RW, .type = ARM_CP_CONST,
+              .access = PL2_RW, .type = ARM_CP_CONST, .accessfn = hstr_t1_access,
+              .fieldoffset = offsetof(CPUARMState, v8r.hactlr), 
               .resetvalue = 0 },
 #endif
             { .name = "ACTLR_EL1", .state = ARM_CP_STATE_AA64,
@@ -6129,6 +6269,22 @@ void register_cp_regs_for_features(ARMCPU *cpu)
              .access = PL1_RW, .state = ARM_CP_STATE_AA32,
              .accessfn = hcr_tidcp_access,
              .raw_writefn = raw_write, .fieldoffset = offsetof(CPUARMState, v8r.imp_slavepctlr) },
+           { .name = "IMP_PERIPHPREGIONR", .cp = 15, .crn = 15, .crm = 0, .opc1 = 0, .opc2 = 0,
+             .access = PL1_RW, .state = ARM_CP_STATE_AA32, .resetvalue = cpu->cfgperiphbase & 0xFFE00000,
+             .accessfn = hcr_tidcp_peripheretionr_access,
+             .raw_writefn = raw_write, .fieldoffset = offsetof(CPUARMState, v8r.imp_periphpregionr) },
+           { .name = "IMP_FLASHIFREGIONR", .cp = 15, .crn = 15, .crm = 0, .opc1 = 0, .opc2 = 1,
+             .access = PL1_RW, .state = ARM_CP_STATE_AA32,
+             .accessfn = hcr_tidcp_access, .resetvalue = 0,
+             .raw_writefn = raw_write, .fieldoffset = offsetof(CPUARMState, v8r.imp_flashifregionr) },
+           { .name = "IMP_BUILDOPTR", .cp = 15, .crn = 15, .crm = 2, .opc1 = 0, .opc2 = 0,
+             .access = PL1_R | PL2_R, .state = ARM_CP_STATE_AA32,
+             .resetvalue = cpu->imp_buildoptr,
+             .raw_readfn = raw_read, .fieldoffset = offsetof(CPUARMState, v8r.imp_buildoptr) },
+           { .name = "IMP_PINOPTR", .cp = 15, .crn = 15, .crm = 2, .opc1 = 0, .opc2 = 7,
+             .access = PL1_R | PL2_R, .state = ARM_CP_STATE_AA32,
+             .resetvalue = cpu->imp_pinoptr,
+             .raw_readfn = raw_read, .fieldoffset = offsetof(CPUARMState, v8r.imp_pinoptr) },
            REGINFO_SENTINEL
         };
         define_arm_cp_regs(cpu, v8r_cp_reginfo);

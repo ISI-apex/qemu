@@ -636,11 +636,18 @@ typedef struct CPUARMState {
 
 #ifdef HPSC
     struct {
+        uint32_t hactlr;
+        uint32_t imp_periphpregionr;
+        uint32_t imp_flashifregionr;
+        uint32_t imp_buildoptr;
+        uint32_t imp_pinoptr;
         uint32_t tcmregion[3];
         uint32_t imp_csctlr;
         uint32_t imp_bpctlr;
         uint32_t imp_memprotctlr;
         uint32_t imp_slavepctlr;
+        uint32_t ich_lr[4];
+        uint32_t ich_lrc[4];
     } v8r;
 #endif
     void *nvic;
@@ -837,9 +844,6 @@ struct ARMCPU {
     /* DCZ blocksize, in log_2(words), ie low 4 bits of DCZID_EL0 */
     uint32_t dcz_blocksize;
     uint64_t rvbar;
-#ifdef HPSC
-    uint32_t cfgperiphbase;
-#endif
     int pe;
 
     /* Configurable aspects of GIC cpu interface (which is part of the CPU) */
@@ -866,6 +870,9 @@ struct ARMCPU {
     /* Used to synchronize KVM and QEMU in-kernel device levels */
     uint8_t device_irq_level;
 #ifdef HPSC
+    uint32_t cfgperiphbase;
+    uint32_t imp_pinoptr;
+    uint32_t imp_buildoptr;
     uint32_t tcmregion[3];
 #endif
 };
