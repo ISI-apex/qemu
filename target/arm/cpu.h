@@ -637,6 +637,7 @@ typedef struct CPUARMState {
 #ifdef HPSC
     struct {
         uint32_t hactlr;
+        uint32_t hrmr;
         uint32_t imp_periphpregionr;
         uint32_t imp_flashifregionr;
         uint32_t imp_buildoptr;

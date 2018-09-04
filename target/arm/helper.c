@@ -1566,6 +1566,20 @@ static uint64_t hprlar_read(CPUARMState *env, const ARMCPRegInfo *ri)
     assert (i < 24);
     return env->pmsav8r.hprlar[i]; 
 }
+
+static void hrmr_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                       uint64_t value)
+{
+    /* if RR bit (bit 1) is 1, it is a warm reset request */
+    if (value & (0x1 << 1)) {
+        ARMCPU * cpu = arm_env_get_cpu(env);
+        CPUState * cs = &cpu->parent_obj;
+        CPUClass *cc = CPU_GET_CLASS(cs);
+	/* actual resetting is not tested yet */
+        cc->reset(cs);	
+    }
+}
+
 #endif
 static void vbar_write(CPUARMState *env, const ARMCPRegInfo *ri,
                        uint64_t value)
@@ -4328,9 +4342,9 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .resetvalue = 0 },
     { .name = "HRMR", .state = ARM_CP_STATE_AA32,
       .cp = 15, .opc1 = 4, .crn = 12, .crm = 0, .opc2 = 2,
-      .access = PL2_RW, .writefn = vbar_write,
-      .accessfn = hstr_t12_access,
-      .fieldoffset = offsetof(CPUARMState, cp15.vbar_el[2]),
+      .access = PL2_RW, .writefn = hrmr_write,
+      .accessfn = hstr_t12_access, .type = ARM_CP_NO_RAW,
+      .fieldoffset = offsetof(CPUARMState, v8r.hrmr),
       .resetvalue = 0 },
 #endif
     { .name = "VBAR_EL2", .state = ARM_CP_STATE_AA64,
