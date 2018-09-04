@@ -1614,6 +1614,9 @@ static MemTxResult nvic_sysreg_read(void *opaque, hwaddr addr,
     uint32_t offset = addr;
     unsigned i, startvec, end;
     uint32_t val;
+#ifdef HPSC_M4F
+    CPUARMState *env = &s->cpu->env;
+#endif
 
     if (attrs.user && !nvic_user_access_ok(s, addr, attrs)) {
         /* Generate BusFault for unprivileged accesses */
@@ -1682,26 +1685,18 @@ static MemTxResult nvic_sysreg_read(void *opaque, hwaddr addr,
             val = deposit32(val, i * 8, 8, get_prio(s, hdlidx, sbank));
         }
         break;
-#ifdef HPSC_M4F
+#ifdef HPSC_M4F	 /* Floating point system registers */
     case 0xd88:
-    case 0xf34 ... 0xf3c: /* floating-point system registers */
-        {
-            CPUARMState *env = &s->cpu->env;
-            switch (offset) {
-               case 0xd88:
-                 val = env->vfp.cpacr;
-                 break;
-               case 0xf34:
-                 val = env->vfp.fpccr;
-                 break;
-               case 0xf38:
-                 val = env->vfp.fpcar;
-                 break;
-               case 0xf3c:
-                 val = env->vfp.fpdscr;
-                 break;
-            }
-        }
+        val = env->vfp.cpacr;
+        break;
+    case 0xf34:
+        val = env->vfp.fpccr;
+        break;
+    case 0xf38:
+        val = env->vfp.fpcar;
+        break;
+    case 0xf3c:
+        val = env->vfp.fpdscr;
         break;
 #endif
     case 0xfe0 ... 0xfff: /* ID.  */
@@ -1735,7 +1730,9 @@ static MemTxResult nvic_sysreg_write(void *opaque, hwaddr addr,
     uint32_t offset = addr;
     unsigned i, startvec, end;
     unsigned setval = 0;
-
+#ifdef HPSC_M4F
+    CPUARMState *env = &s->cpu->env;
+#endif
     trace_nvic_sysreg_write(addr, value, size);
 
     if (attrs.user && !nvic_user_access_ok(s, addr, attrs)) {
@@ -1802,26 +1799,18 @@ static MemTxResult nvic_sysreg_write(void *opaque, hwaddr addr,
         }
         nvic_irq_update(s);
         return MEMTX_OK;
-#ifdef HPSC_M4F
+#ifdef HPSC_M4F	 /* Floating point system registers */
     case 0xd88:
-    case 0xf34 ... 0xf3c: /* floating-point system registers */
-        {
-            CPUARMState *env = &s->cpu->env;
-            switch (offset) {
-               case 0xd88:
-                 env->vfp.cpacr = value; 
-                 break;
-               case 0xf34:
-                 env->vfp.fpccr = value; 
-                 break;
-               case 0xf38:
-                 env->vfp.fpcar = value; 
-                 break;
-               case 0xf3c:
-                 env->vfp.fpdscr = value; 
-                 break;
-            }
-        }
+        env->vfp.cpacr = value; 
+        break;
+    case 0xf34:
+        env->vfp.fpccr = value; 
+        break;
+    case 0xf38:
+        env->vfp.fpcar = value; 
+        break;
+    case 0xf3c:
+        env->vfp.fpdscr = value; 
         break;
 #endif
     }
