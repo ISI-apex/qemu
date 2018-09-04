@@ -1613,7 +1613,7 @@ static MemTxResult nvic_sysreg_read(void *opaque, hwaddr addr,
     NVICState *s = (NVICState *)opaque;
     uint32_t offset = addr;
     unsigned i, startvec, end;
-    uint32_t val;
+    uint32_t val = 0;
 
     if (attrs.user && !nvic_user_access_ok(s, addr, attrs)) {
         /* Generate BusFault for unprivileged accesses */
