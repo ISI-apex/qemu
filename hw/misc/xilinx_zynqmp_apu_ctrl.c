@@ -46,7 +46,7 @@
      OBJECT_CHECK(ZynqMPAPU, (obj), TYPE_ZYNQMP_APU)
 
 #ifndef XILINX_ZYNQMP_APU_ERR_DEBUG
-#define XILINX_ZYNQMP_APU_ERR_DEBUG 0
+#define XILINX_ZYNQMP_APU_ERR_DEBUG 1
 #endif
 
 #define DB_PRINT_L(lvl, fmt, args...) do {\
@@ -60,6 +60,7 @@
 #define HPSC
 #define HPSC_TRCH
 
+DEP_REG32(CONFIG0, 0x20)
 DEP_REG32(RVBARADDR0L, 0x40)
 DEP_REG32(RVBARADDR0H, 0x44)
 DEP_REG32(RVBARADDR1L, 0x48)
@@ -166,6 +167,7 @@ static void zynqmp_apu_pwrctl_post_write(DepRegisterInfo *reg, uint64_t val)
 }
 
 static const DepRegisterAccessInfo zynqmp_apu_regs_info[] = {
+    { .name = "CONFIG0",  .decode.addr = A_CONFIG0 },
 #ifdef HPSC_TRCH
 #define RVBAR_REGDEF(n) \
     {   .name = "RVBAR CPU " #n " Low",  .decode.addr = A_RVBARADDR ## n ## L, \
