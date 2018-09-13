@@ -10625,25 +10625,25 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
         }
 #endif
         for (n = num_region - 1; n >= 0; n--) {
+#ifdef HPSC
             /* region search */
             /* Note that the base address is bits [31:5] from the register
              * with bits [4:0] all zeroes, but the limit address is bits
              * [31:5] from the register with bits [4:0] all ones.
              */
-#ifdef HPSC
             uint32_t base; 
             uint32_t limit;
 	    if (arm_feature(env, ARM_FEATURE_V8R)) {
               if (mmu_idx == ARMMMUIdx_S1E2) {
-                base = env->pmsav8r.hprbar[n] & ~0x1f;
-                limit = env->pmsav8r.hprlar[n] | 0x1f;
+                base = env->pmsav8r.hprbar[n] & ~0x3f;
+                limit = env->pmsav8r.hprlar[n] | 0x3f;
                 if (!(env->pmsav8r.hprlar[n] & 0x1)) {
                   /* Region disabled */
                   continue;
                 }
               } else {
-                base = env->pmsav8r.prbar[n] & ~0x1f;
-                limit = env->pmsav8r.prlar[n] | 0x1f;
+                base = env->pmsav8r.prbar[n] & ~0x3f;
+                limit = env->pmsav8r.prlar[n] | 0x3f;
                 if (!(env->pmsav8r.prlar[n] & 0x1)) {
                   /* Region disabled */
                   continue;
@@ -10658,6 +10658,11 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
               }
             }
 #else
+            /* region search */
+            /* Note that the base address is bits [31:5] from the register
+             * with bits [4:0] all zeroes, but the limit address is bits
+             * [31:5] from the register with bits [4:0] all ones.
+             */
             uint32_t base = env->pmsav8.rbar[secure][n] & ~0x1f;
             uint32_t limit = env->pmsav8.rlar[secure][n] | 0x1f;
 
@@ -10682,6 +10687,33 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
             matchregion = n;
             hit = true;
 
+#ifdef HPSC
+            int new_target_page_mask;
+            int new_target_page_bits;
+
+            if (arm_feature(env, ARM_FEATURE_V8R)) {
+                new_target_page_bits = 6;	/* 64 bytes */
+            } else {
+                new_target_page_bits = TARGET_PAGE_BITS;
+            }
+            new_target_page_mask = ~ ((1 << new_target_page_bits) - 1);
+            if (base & ~new_target_page_mask) {
+                qemu_log_mask(LOG_UNIMP,
+                              "MPU_PBAR[%d]: No support for MPU region base"
+                              "address of 0x%" PRIx32 ". Minimum alignment is "
+                              "%d\n",
+                              n, base, new_target_page_bits);
+                continue;
+            }
+            if ((limit + 1) & ~new_target_page_mask) {
+                qemu_log_mask(LOG_UNIMP,
+                              "MPU_PLAR[%d]: No support for MPU region limit"
+                              "address of 0x%" PRIx32 ". Minimum alignment is "
+                              "%d\n",
+                              n, limit, new_target_page_bits);
+                continue;
+            }
+#else
             if (base & ~TARGET_PAGE_MASK) {
                 qemu_log_mask(LOG_UNIMP,
                               "MPU_RBAR[%d]: No support for MPU region base"
@@ -10698,6 +10730,7 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
                               n, limit, TARGET_PAGE_BITS);
                 continue;
             }
+#endif
         }
     }
 
