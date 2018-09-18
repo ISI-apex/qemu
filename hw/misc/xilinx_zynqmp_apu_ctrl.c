@@ -80,7 +80,7 @@ REG32(RVBARADDR7L, 0x78)
 REG32(RVBARADDR7H, 0x7c)
 #endif
 DEP_REG32(PWRCTL, 0x90)
-    DEP_FIELD(PWRCTL, CPUPWRDWNREQ, 3, 0)
+    DEP_FIELD(PWRCTL, CPUPWRDWNREQ, 4, 0)
 
 #define R_MAX ((R_PWRCTL) + 1)
 
@@ -125,7 +125,7 @@ static void zynqmp_apu_reset(DeviceState *dev)
         dep_register_reset(&s->regs_info[i]);
     }
 
-    s->cpu_pwrdwn_req = 0;
+    s->cpu_pwrdwn_req = ~0;
     s->cpu_in_wfi = 0;
     update_wfi_out(s);
 }
@@ -203,6 +203,7 @@ static const DepRegisterAccessInfo zynqmp_apu_regs_info[] = {
 #endif
 #endif
     { .name = "PWRCTL",  .decode.addr = A_PWRCTL,
+        .reset = 0x00ff, /* 8 CPUs, 1 bit per CPU indicating whether power is OFF */
         .post_write = zynqmp_apu_pwrctl_post_write,
     }
 };
