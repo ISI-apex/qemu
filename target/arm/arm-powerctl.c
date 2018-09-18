@@ -18,7 +18,7 @@
 #include "exec/exec-all.h"
 
 #ifndef DEBUG_ARM_POWERCTL
-#define DEBUG_ARM_POWERCTL 0
+#define DEBUG_ARM_POWERCTL 1
 #endif
 
 #define DPRINTF(fmt, args...) \
