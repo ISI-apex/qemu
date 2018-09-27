@@ -964,7 +964,12 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
 #endif
         set_feature(env, ARM_FEATURE_V7);
         set_feature(env, ARM_FEATURE_ARM_DIV);
+#ifdef HPSC
+        if (!arm_feature(env, ARM_FEATURE_V8R))
+            set_feature(env, ARM_FEATURE_LPAE);
+#else
         set_feature(env, ARM_FEATURE_LPAE);
+#endif
     }
     if (arm_feature(env, ARM_FEATURE_V7)) {
         set_feature(env, ARM_FEATURE_VAPA);
@@ -1105,7 +1110,6 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
     if (cpu->pmsav7_dregion == 0) {
         cpu->has_mpu = false;
     }
-
     if (arm_feature(env, ARM_FEATURE_PMSA) &&
         arm_feature(env, ARM_FEATURE_V7)) {
         uint32_t nr = cpu->pmsav7_dregion;
@@ -1579,9 +1583,18 @@ static void cortex_r52f_initfn(Object *obj)
     cpu->id_isar4 = 0x00010142;
     cpu->id_isar5 = 0x00010001;
     cpu->mp_is_up = true;
-    cpu->pmsav7_dregion = 16; /* DK: can be more than that because the region can be more flexible */
-    cpu->pmsav8r_hdregion = 16;
     cpu->reset_sctlr = 0x30c50838;
+    cpu->pmsav7_dregion = 16; 
+    cpu->hmpuir = 16;
+    cpu->cfgperiphbase = 0xF9A00000;
+    cpu->cfgllppsize = 0x6;	/* make 2MB peripheral region size */
+    cpu->cfgllppimp = 0; /* Low Latency Peripheral Port is not implemented */
+    cpu->cfgtcmbootx = 0; 	/* no tcm boot */
+				/* TCM: 1MB */
+    cpu->tcmregion[0] = (0xb << 2) | ((cpu->cfgtcmbootx & 0x1) << 1) | (cpu->cfgtcmbootx & 0x1);
+    cpu->tcmregion[1] = (0xb << 2) | ((cpu->cfgtcmbootx & 0x1) << 1) | (cpu->cfgtcmbootx & 0x1);
+    cpu->tcmregion[2] = (0xb << 2) | ((cpu->cfgtcmbootx & 0x1) << 1) | (cpu->cfgtcmbootx & 0x1);
+
 //    define_arm_cp_regs(cpu, cortexr52_cp_reginfo);
 }
 #endif
@@ -2079,12 +2092,14 @@ static Property arm_cpu_properties[] = {
     DEFINE_PROP_INT32("core-count", ARMCPU, core_count, -1),
 #ifdef HPSC
     DEFINE_PROP_UINT64("rvbar", ARMCPU, rvbar, 0),
-    DEFINE_PROP_UINT32("cfgperiphbase", ARMCPU, cfgperiphbase, 0),
+    DEFINE_PROP_UINT32("cfgperiphbase", ARMCPU, cfgperiphbase, 0xF9A00000),
     DEFINE_PROP_UINT32("buildoptr", ARMCPU, imp_buildoptr, 0),
     DEFINE_PROP_UINT32("pinoptr", ARMCPU, imp_pinoptr, 0),
-    DEFINE_PROP_UINT32("atcmregionr", ARMCPU, tcmregion[0], 0),
+/*    DEFINE_PROP_UINT32("atcmregionr", ARMCPU, tcmregion[0], 0),
     DEFINE_PROP_UINT32("btcmregionr", ARMCPU, tcmregion[1], 0),
     DEFINE_PROP_UINT32("ctcmregionr", ARMCPU, tcmregion[2], 0),
+    DEFINE_PROP_UINT32("mpuir", ARMCPU, mpuir, 0),
+    DEFINE_PROP_UINT32("hmpuir", ARMCPU, hmpuir, 0), */
 #endif
     DEFINE_PROP_END_OF_LIST()
 };

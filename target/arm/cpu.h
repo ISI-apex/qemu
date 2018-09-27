@@ -649,6 +649,8 @@ typedef struct CPUARMState {
         uint32_t imp_slavepctlr;
         uint32_t ich_lr[4];
         uint32_t ich_lrc[4];
+        uint32_t pmevcntr[4];
+        uint32_t pmevtyper[4];
     } v8r;
 #endif
     void *nvic;
@@ -761,7 +763,7 @@ struct ARMCPU {
     /* PMSAv7 MPU number of supported regions */
     uint32_t pmsav7_dregion;
 #ifdef HPSC
-    uint32_t pmsav8r_hdregion;
+    uint32_t hmpuir;
 #endif
     /* v8M SAU number of supported regions */
     uint32_t sau_sregion;
@@ -875,6 +877,10 @@ struct ARMCPU {
     uint32_t imp_pinoptr;
     uint32_t imp_buildoptr;
     uint32_t tcmregion[3];
+    uint32_t cfgllppsize;
+    uint32_t cfgllppimp;
+    uint32_t cfgtcmbootx;
+    
 #endif
 };
 

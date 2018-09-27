@@ -40,6 +40,12 @@ void nand_getpins(DeviceState *dev, int *rb);
 void nand_setio(DeviceState *dev, uint32_t value);
 uint32_t nand_getio(DeviceState *dev);
 uint32_t nand_getbuswidth(DeviceState *dev);
+#define HPSC_ECC
+#ifdef HPSC_ECC
+uint32_t nand_page_size(DeviceState *dev);
+uint32_t nand_iolen(DeviceState *dev);
+#endif
+#undef HPSC_ECC
 
 #define NAND_MFR_TOSHIBA	0x98
 #define NAND_MFR_SAMSUNG	0xec

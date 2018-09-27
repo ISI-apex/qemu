@@ -55,10 +55,19 @@
 #define PL35X(obj) \
      OBJECT_CHECK(PL35xState, (obj), TYPE_PL35X)
 
+#define HPSC_ECC
+
 typedef struct PL35xItf {
     MemoryRegion mm;
     DeviceState *dev;
     uint8_t nand_pending_addr_cycles;
+#ifdef HPSC_ECC
+    uint8_t ecc_digest[16 * 1024];
+    uint8_t ecc_oob[16 * 1024];
+    uint32_t ecc_pos, ecc_subpage_offset;
+    void * parent;
+#endif
+ 
 } PL35xItf;
 
 typedef struct PL35xState {
@@ -73,22 +82,126 @@ typedef struct PL35xState {
     /* FIXME: add Interrupt support */
 
     /* FIXME: add ECC support */
-
- 
+#ifdef HPSC_ECC
+    uint32_t regs[0x450 >> 2];
+#else
     uint32_t configs[10];	/* 0x0, ..., 0x24 */ 
     uint32_t cycles[8];	/* 0x100, 120, ... 1E0 */ 
     uint32_t ecc[2][11];	/* 0x300, 304, 308, 30c, 310, 314, .., 328 */ 
 				/* 0x400, 404, 408, 40c, 410, 414, .., 428 */
+#endif
+
     uint8_t x; /* the "x" in pl35x */
 } PL35xState;
 
+#ifdef HPSC_ECC
+static bool new_ecc = false;
+static void pl35x_ecc_init(PL35xItf *s)
+{
+    /* FIXME: Bad performance */
+    memset(s->ecc_digest, 0xFF, 16 * 1024);
+    memset(s->ecc_oob, 0xFF, 16 * 1024);
+    s->ecc_pos = 0;
+    s->ecc_subpage_offset = 0;
+}
+#define ECC_BYTES_PER_SUBPAGE 3
+#define ECC_CODEWORD_SIZE 512
+
+static void pl35x_ecc_digest(PL35xItf *s, uint8_t data)
+{
+    uint32_t ecc_bytes_per_subpage = ECC_BYTES_PER_SUBPAGE;
+
+    s->ecc_digest[s->ecc_pos++] ^= ~data;
+    if (!(s->ecc_pos % ecc_bytes_per_subpage)) {
+        s->ecc_pos -= ecc_bytes_per_subpage;
+    }
+
+    s->ecc_subpage_offset++;
+    if (s->ecc_subpage_offset == ECC_CODEWORD_SIZE) {
+        s->ecc_subpage_offset = 0;
+        do {
+            s->ecc_pos++;
+        } while (s->ecc_pos % ecc_bytes_per_subpage);
+    }
+}
+#endif
+
+#ifdef HPSC_ECC__
+#define #define R_ECC_SLC_MLC (1 << 25)
+/* code borrowd from Arasan NFC */
+static void hpsc_ecc_init(PL35xState *s)
+{
+    /* FIXME: Bad performance */
+    memset(s->ecc_digest, 0xFF, 16 * 1024);
+    s->ecc_pos = 0;
+    s->ecc_subpage_offset = 0;
+}
+
+/* not an ECC algorithm, but gives a deterministic OOB that
+ * depends on the in band data
+ */
+
+static void hpsc_ecc_digest(PL35xState *s, uint8_t data)
+{
+    uint32_t page_size = 512; /* PL35x RTM page 2-11 */
+    int ecc_bytes_per_subpage = DEP_AF_EX32(s->regs, ECC, ECC_SIZE) /
+                                (page_size / ECC_CODEWORD_SIZE);
+
+    s->ecc_digest[s->ecc_pos++] ^= ~data;
+    if (!(s->ecc_pos % ecc_bytes_per_subpage)) {
+        s->ecc_pos -= ecc_bytes_per_subpage;
+    }
+
+    s->ecc_subpage_offset++;
+    if (s->ecc_subpage_offset == ECC_CODEWORD_SIZE) {
+        s->ecc_subpage_offset = 0;
+        do {
+            s->ecc_pos++;
+        } while (s->ecc_pos % ecc_bytes_per_subpage);
+    }
+}
+
+static bool hpsc_ecc_correct(PL35xState *s)
+{
+    int i;
+    uint8_t cef = 0;
+
+    for (i = 0; i < DEP_AF_EX32(s->regs, ECC, ECC_SIZE); ++i) {
+        if (s->ecc_oob[i] != s->ecc_digest[i]) {
+            arasan_nfc_irq_event(s, R_INT_MUL_BIT_ERR);
+            if (DEP_AF_EX32(s->regs, ECC_ERR_COUNT, PAGE_BOUND) != 0xFF) {
+                s->regs[R_ECC_ERR_COUNT] +=
+                    1 << R_ECC_ERR_COUNT_PAGE_BOUND_SHIFT;
+            }
+            /* FIXME: All errors in the first packet - not right */
+            if (DEP_AF_EX32(s->regs, ECC_ERR_COUNT, PACKET_BOUND) != 0xFF) {
+                s->regs[R_ECC_ERR_COUNT] +=
+                    1 << R_ECC_ERR_COUNT_PACKET_BOUND_SHIFT;
+            }
+            DB_PRINT("ECC check failed on ECC byte %#x, %#02" PRIx8 " != %#02"
+                     PRIx8 "\n", i, s->ecc_oob[i], s->ecc_digest[i]);
+            return true;
+        } else {
+            cef ^= s->ecc_oob[i];
+        }
+    }
+    /* Fake random successful single bit corrections for hamming */
+    for (i = 0; i < 7; ++i) {
+        cef = (cef >> 1) ^ (cef & 0x1);
+    }
+    if ((cef & 0x1) && ((s->regs[R_ECC] & R_ECC_SLC_MLC))) {
+        arasan_nfc_irq_event(s, R_INT_ERR_INTRPT);
+    }
+    DB_PRINT("ECC check passed");
+    return false;
+}
+#endif
 static int first = 1;
 static uint64_t pl35x_read(void *opaque, hwaddr addr,
                          unsigned int size)
 {
     PL35xState *s = opaque;
     uint32_t r = 0;
-    int rdy;
 #ifdef HPSC
     if (first) {
     memory_region_add_subregion(s->mmio.container, 0x600000000, &s->itf[1].mm);
@@ -97,6 +210,8 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
 #endif
     switch (addr) {
     case 0x0:
+      {
+        int rdy;
         if (s->itf[0].dev && object_dynamic_cast(OBJECT(s->itf[0].dev),
                                                       "nand")) {
             nand_getpins(s->itf[0].dev, &rdy);
@@ -107,11 +222,17 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
             nand_getpins(s->itf[1].dev, &rdy);
             r |= (!!rdy) << 6;
         }
+        }
         break;
+
     case 0x4:
     case 0x20:
     case 0x24:
+#ifdef HPSC_ECC
+         r = s->regs[addr >> 2];
+#else
          r = s->configs[addr >> 2]; 
+#endif
 #ifdef HPSC
     case 0x100:
     case 0x120:
@@ -121,7 +242,11 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     case 0x1a0:
     case 0x1c0:
     case 0x1e0: {
+#ifdef HPSC_ECC
+         r = s->regs[addr >> 2];
+#else
 	r = s->cycles[(addr & 0xf0) >> 5];
+#endif
 	break;
     }
     case 0x300:
@@ -141,12 +266,35 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     case 0x40c:
     case 0x410:
     case 0x414:
-    case 0x418:
+        r = s->regs[addr >> 2];
+        break;
+#ifdef HPSC_ECC
+    case 0x418: 
     case 0x41c:
     case 0x420:
     case 0x424:
+        r = s->regs[addr >> 2];
+        break;
+#else
+    case 0x418: /* how about calculate it now? */
+                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
+                r = s->regs[addr >> 2];
+		break;
+    case 0x41c:
+                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
+                r = s->regs[addr >> 2];
+		break;
+    case 0x420:
+                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
+                r = s->regs[addr >> 2];
+		break;
+    case 0x424:
+                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
+                r = s->regs[addr >> 2];
+		break;
+#endif
     case 0x428:
-        r = s->ecc[(addr &0x400) >> 10][(addr & 0xf) >> 2];
+        r = s->regs[addr >> 2];
 	break;
 #endif
     default:
@@ -154,13 +302,14 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
                  addr);
         break;
     }
+    DB_PRINT("=== addr = 0x%lx val = 0x%x\n", addr, r);
     return r;
 }
 
 static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
                       unsigned int size)
 {
-    DB_PRINT("addr=%x v=%x\n", (unsigned)addr, (unsigned)value64);
+    DB_PRINT("=== addr = 0x%x v = 0x%x\n", (unsigned)addr, (unsigned)value64);
 #ifdef HPSC
     PL35xState *s = opaque;
     switch (addr) {
@@ -172,7 +321,11 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
     case 0x1c:
     case 0x20:
     case 0x24:
+#ifdef HPSC_ECC
+        s->regs[addr >> 2] = value64;
+#else
          s->configs[addr >> 2] = value64;
+#endif
         break;
     case 0x100:
     case 0x120:
@@ -182,7 +335,11 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
     case 0x1a0:
     case 0x1c0:
     case 0x1e0: {
+#ifdef HPSC_ECC
+        s->regs[addr >> 2] = value64;
+#else
 	s->cycles[(addr & 0xf0) >> 5] = value64;
+#endif
 	break;
     }
     case 0x300:
@@ -207,7 +364,11 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
     case 0x420:
     case 0x424:
     case 0x428: {
+#ifdef HPSC_ECC
+        s->regs[addr >> 2] = value64;
+#else
         s->ecc[(addr &0x400) >> 10][(addr & 0xf) >> 2] = value64;
+#endif
 	break;
     }
     default:
@@ -232,6 +393,9 @@ static const MemoryRegionOps pl35x_ops = {
     }
 };
 
+#ifdef HPSC_ECC
+    int data_size = 0;
+#endif
 static uint64_t nand_read(void *opaque, hwaddr addr,
                            unsigned int size)
 {
@@ -240,6 +404,19 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
     int shift = 0;
     uint32_t r = 0;
 
+#ifdef HPSC_ECC
+    PL35xState * ps = s->parent;
+    int page_size = nand_page_size(s->dev);
+    int nand_remain_data = nand_iolen(s->dev);
+    DB_PRINT("before: nand_iolen = 0x%x\n", nand_remain_data);
+    if (nand_remain_data > 0 && nand_remain_data < 4 && size >= 4) {
+	// previous read_byte didn't clean the buffer.
+	// flush it.
+        while(nand_remain_data--) {
+            nand_getio(s->dev);
+        }
+    }
+#endif
     while (len--) {
         uint8_t r8;
 
@@ -248,6 +425,34 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         shift += 8;
     }
     DB_PRINT("addr=0x%x r=0x%x size=%d\n", (unsigned)addr, r, size);
+#ifdef HPSC_ECC
+    DB_PRINT("after: nand_iolen = 0x%x\n", nand_iolen(s->dev));
+    if (new_ecc) {
+        DB_PRINT("New ECC starts\n");
+        pl35x_ecc_init(s);
+        data_size = 0;
+        new_ecc = false;
+    } 
+    data_size += 4;
+    pl35x_ecc_digest(s, r);
+    if (data_size == page_size) {	// assume PAGE_SIZE = 2048
+        /* save ecc value to the registers */
+        DB_PRINT("ECC : is saved\n");
+        for (int i = 0; i < 4 ; i++) {
+            uint32_t r32 = (0x40 << 24);	// always ecc is correct
+            for (int j = 0, shift = 0; j < ECC_BYTES_PER_SUBPAGE; j++) {
+                uint8_t r8 = s->ecc_digest[i*ECC_BYTES_PER_SUBPAGE+j];
+                r32 |= r8 << shift;
+                shift += 8;
+                printf("0x%x ", r8);
+            }
+            int ecc1_block_idx = 0x418 + (i << 2);
+            ps->regs[ecc1_block_idx >> 2] = r32;
+        }
+        printf("\n");
+    }
+    DB_PRINT("return (0x%x)\n", r);
+#endif
     return r;
 }
 
@@ -281,7 +486,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
 
     /* Writing data to the NAND.  */
     if (data_phase) {
-    DB_PRINT("writing data to NAND\n");
+    DB_PRINT("data_phase: writing data to NAND\n");
         nand_setpins(s->dev, 0, 0, 0, 1, 0);
         while (size--) {
             nand_setio(s->dev, value & 0xff);
@@ -320,6 +525,9 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     DB_PRINT("writing commands. One or two (Start and End)\n");
         nand_setpins(s->dev, 1, 0, 0, 1, 0);
         nand_setio(s->dev, end_cmd);
+#ifdef HPSC_ECC
+	new_ecc = true;
+#endif
     }
 }
 
@@ -396,6 +604,10 @@ static int pl35x_init(SysBusDevice *dev)
     } else if (s->x == 4) { /* PL354 has a second SRAM */
         pl35x_init_sram(dev, &s->itf[itfn]);
     }
+#ifdef HPSC_ECC
+    s->itf[0].parent = s;
+    s->itf[1].parent = s;
+#endif
     return 0;
 }
 static void pl35x_initfn(Object *obj)

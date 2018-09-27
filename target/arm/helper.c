@@ -2374,6 +2374,51 @@ void arm_gt_stimer_cb(void *opaque)
     gt_recalc_timer(cpu, GTIMER_SEC);
 }
 
+#ifdef HPSC
+static const ARMCPRegInfo v8r_pmev_reginfo[] = {
+    { .name = "PMEVCNTR0", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 0,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[0]),
+      .resetvalue = 0, },
+    { .name = "PMEVCNTR1", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 1,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[1]),
+      .resetvalue = 0, },
+    { .name = "PMEVCNTR2", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 2,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[2]),
+      .resetvalue = 0, },
+    { .name = "PMEVCNTR3", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 3,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[3]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER0", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 0,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[0]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER1", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 1,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[1]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER2", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 2,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[2]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER3", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 3,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[3]),
+      .resetvalue = 0, },
+    REGINFO_SENTINEL
+};
+#endif
 static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
     /* Note that CNTFRQ is purely reads-as-written for the benefit
      * of software; writing it doesn't actually change the timer frequency.
@@ -6039,7 +6084,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .name = "HMPUIR",
               .cp = 15, .crn = 0, .crm = 0, .opc1 = 4, .opc2 = 4,
               .access = PL1_R, .type = ARM_CP_CONST,
-              .resetvalue = cpu->pmsav8r_hdregion
+              .resetvalue = cpu->hmpuir
         };
 #endif
         ARMCPRegInfo crn0_wi_reginfo = {
@@ -6073,6 +6118,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         else if (arm_feature(env, ARM_FEATURE_V8R)) {
             define_arm_cp_regs(cpu, id_v8r_midr_cp_reginfo);
             define_arm_cp_regs(cpu, id_v8r_ich_reginfo);
+            define_arm_cp_regs(cpu, v8r_pmev_reginfo);
         }
 #endif
         else {
@@ -6284,7 +6330,10 @@ void register_cp_regs_for_features(ARMCPU *cpu)
              .accessfn = hcr_tidcp_access,
              .raw_writefn = raw_write, .fieldoffset = offsetof(CPUARMState, v8r.imp_slavepctlr) },
            { .name = "IMP_PERIPHPREGIONR", .cp = 15, .crn = 15, .crm = 0, .opc1 = 0, .opc2 = 0,
-             .access = PL1_RW, .state = ARM_CP_STATE_AA32, .resetvalue = cpu->cfgperiphbase & 0xFFE00000,
+             .access = PL1_RW, .state = ARM_CP_STATE_AA32, 
+	     .resetvalue = (cpu->cfgperiphbase & 0xFFFFF000)
+                            | ((cpu->cfgllppsize & 0xf) << 3)
+                            | ((cpu->cfgllppimp & 0x1) << 2),
              .accessfn = hcr_tidcp_peripheretionr_access,
              .raw_writefn = raw_write, .fieldoffset = offsetof(CPUARMState, v8r.imp_periphpregionr) },
            { .name = "IMP_FLASHIFREGIONR", .cp = 15, .crn = 15, .crm = 0, .opc1 = 0, .opc2 = 1,
@@ -10572,7 +10621,7 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
         int num_region = (int)cpu->pmsav7_dregion;
 #ifdef HPSC
         if (arm_feature(env, ARM_FEATURE_V8R) && (mmu_idx == ARMMMUIdx_S1E2)) {
-                num_region = (int)cpu->pmsav8r_hdregion;
+                num_region = (int)cpu->hmpuir;
         }
 #endif
         for (n = num_region - 1; n >= 0; n--) {

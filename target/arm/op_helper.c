@@ -140,7 +140,13 @@ static void deliver_fault(ARMCPU *cpu, vaddr addr, MMUAccessType access_type,
          * 0x3f is a (currently) reserved FSC code, in case the constructed
          * syndrome does leak into the guest somehow.
          */
+#ifdef HPSC
+        if (!arm_feature(env, ARM_FEATURE_V8R)) {
+            assert(target_el != 2 && !arm_el_is_aa64(env, target_el));
+        }
+#else
         assert(target_el != 2 && !arm_el_is_aa64(env, target_el));
+#endif
     }
 
     if (access_type == MMU_INST_FETCH) {
