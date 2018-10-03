@@ -10723,8 +10723,13 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
         uint32_t ap;
         uint32_t xn;
         if (arm_feature(env, ARM_FEATURE_V8R)) {
-          ap = extract32(env->pmsav8r.prbar[matchregion], 1, 2);
-          xn = extract32(env->pmsav8r.prbar[matchregion], 0, 1);
+          if (mmu_idx == ARMMMUIdx_S1E2) {
+            ap = extract32(env->pmsav8r.hprbar[matchregion], 1, 2);
+            xn = extract32(env->pmsav8r.hprbar[matchregion], 0, 1);
+          } else {
+            ap = extract32(env->pmsav8r.prbar[matchregion], 1, 2);
+            xn = extract32(env->pmsav8r.prbar[matchregion], 0, 1);
+          }
         } else {
           ap = extract32(env->pmsav8.rbar[secure][matchregion], 1, 2);
           xn = extract32(env->pmsav8.rbar[secure][matchregion], 0, 1);

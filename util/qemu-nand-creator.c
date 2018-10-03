@@ -42,7 +42,7 @@
 #include <errno.h>
 
 #define ECC_CODEWORD_SIZE 512
-
+#define DEBUG
 #ifdef DEBUG
     #define DPRINT(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
 #else
@@ -264,12 +264,15 @@ done:
     return 0;
 }
 
+bool first = true;
+
 static void ecc_digest(uint8_t *data , uint8_t * oob,
                        uint32_t bytes_read, uint32_t page_size)
 {
     int ecc_bytes_per_subpage =  ecc_size /
                                     (page_size / ECC_CODEWORD_SIZE);
     uint32_t head = 0;
+
     while (head < bytes_read) {
         oob[ecc_pos++] ^= ~data[head];
         if (!(ecc_pos % ecc_bytes_per_subpage)) {
@@ -285,4 +288,16 @@ static void ecc_digest(uint8_t *data , uint8_t * oob,
         }
         head++;
     }
+   printf("--- data ---");
+   for (int i = 0; i < bytes_read; i++) {
+     if (i % 16 == 0) {
+        printf("\n0x%06x: ", i);
+     }
+     printf("0x%02x ", data[i]);
+   }
+   printf("\n--- ECC --- \n");
+   for (int i = 0; i < 4*ecc_bytes_per_subpage; i++) {
+     printf("0x%02x ", oob[i]);
+   }
+   printf("\n\n");
 }

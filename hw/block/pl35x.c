@@ -95,7 +95,11 @@ typedef struct PL35xState {
 } PL35xState;
 
 #ifdef HPSC_ECC
+#define ECC_BYTES_PER_SUBPAGE 3
+#define ECC_CODEWORD_SIZE 512
+
 static bool new_ecc = false;
+static bool w_new_ecc = false;
 static void pl35x_ecc_init(PL35xItf *s)
 {
     /* FIXME: Bad performance */
@@ -104,8 +108,29 @@ static void pl35x_ecc_init(PL35xItf *s)
     s->ecc_pos = 0;
     s->ecc_subpage_offset = 0;
 }
-#define ECC_BYTES_PER_SUBPAGE 3
-#define ECC_CODEWORD_SIZE 512
+
+static void pl35x_ecc_save(PL35xItf *s) {
+    PL35xState * ps = s->parent;
+
+        DB_PRINT("ECC : is saved\n");
+    for (int i = 0; i < 4 ; i++) {
+        uint32_t r32 = (0x40 << 24);	// always ecc is correct
+        for (int j = 0, shift = 0; j < ECC_BYTES_PER_SUBPAGE; j++) {
+            uint8_t r8 = s->ecc_digest[i*ECC_BYTES_PER_SUBPAGE+j];
+            r32 |= (~r8 & 0xff) << shift;	// inverse the bits
+            shift += 8;
+            printf("0x%x ", r8);
+        }
+        int ecc1_block_idx = 0x418 + (i << 2);
+        ps->regs[ecc1_block_idx >> 2] = r32;
+    }
+    DB_PRINT("@0x418 = 0x%08x, @0x41c = 0x%08x, @0x420 = 0x%08x, @0x424 = 0x%08x\n",
+       ps->regs[0x418 >>2], ps->regs[0x41c >>2], ps->regs[0x420 >>2], ps->regs[0x424 >>2]);
+    printf("\n");
+}
+
+int	buf_count = 0;
+uint8_t buff[2048];
 
 static void pl35x_ecc_digest(PL35xItf *s, uint8_t data)
 {
@@ -405,7 +430,6 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
     uint32_t r = 0;
 
 #ifdef HPSC_ECC
-    PL35xState * ps = s->parent;
     int page_size = nand_page_size(s->dev);
     int nand_remain_data = nand_iolen(s->dev);
     DB_PRINT("before: nand_iolen = 0x%x\n", nand_remain_data);
@@ -432,30 +456,31 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         pl35x_ecc_init(s);
         data_size = 0;
         new_ecc = false;
+        buf_count = 0;
     } 
-    data_size += 4;
-    pl35x_ecc_digest(s, r);
+    data_size += size;
+    for (int i = 0; i < size; i++) {
+        buff[buf_count++] = (uint8_t) (r >> (i * 8) & 0xff);
+        pl35x_ecc_digest(s, (uint8_t) (r >> (i * 8) & 0xff));
+    }
     if (data_size == page_size) {	// assume PAGE_SIZE = 2048
+/* dbg */
+  printf("--------- data -----------\n");
+  for(int i = 0; i < page_size; i++) {
+       if (i % 16 == 0) printf("\n 0x%06x: ", i);
+       printf("0x%02x ", buff[i]);
+    }
+  printf("\n");
+/* end dbg */
         /* save ecc value to the registers */
-        DB_PRINT("ECC : is saved\n");
-        for (int i = 0; i < 4 ; i++) {
-            uint32_t r32 = (0x40 << 24);	// always ecc is correct
-            for (int j = 0, shift = 0; j < ECC_BYTES_PER_SUBPAGE; j++) {
-                uint8_t r8 = s->ecc_digest[i*ECC_BYTES_PER_SUBPAGE+j];
-                r32 |= r8 << shift;
-                shift += 8;
-                printf("0x%x ", r8);
-            }
-            int ecc1_block_idx = 0x418 + (i << 2);
-            ps->regs[ecc1_block_idx >> 2] = r32;
-        }
-        printf("\n");
+        pl35x_ecc_save(s);
     }
     DB_PRINT("return (0x%x)\n", r);
 #endif
     return r;
 }
 
+static int w_data_size = 0;
 static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
                        unsigned int size)
 {
@@ -482,6 +507,18 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     if (!data_phase) {
         DB_PRINT("start_cmd=%x end_cmd=%x (valid=%d) acycl=%d\n",
                 start_cmd, end_cmd, ecmd_valid, addr_cycles);
+#ifdef HPSC_ECC
+        switch(start_cmd) {
+            case 0x80 : /* NAND_CMD_PAGEPROGRAM1 */
+                w_new_ecc = true;
+                DB_PRINT("New ECC starts\n");
+                pl35x_ecc_init(s);
+                w_data_size = 0;
+                break;
+            default:
+                break;
+        }
+#endif
     }
 
     /* Writing data to the NAND.  */
@@ -490,8 +527,22 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         nand_setpins(s->dev, 0, 0, 0, 1, 0);
         while (size--) {
             nand_setio(s->dev, value & 0xff);
+#ifdef HPSC_ECC
+            if (w_new_ecc) {
+		assert(w_data_size <= nand_page_size(s->dev));
+                pl35x_ecc_digest(s, (uint8_t) (value & 0xff));
+                w_data_size++;
+            }
+#endif
             value >>= 8;
         }
+#ifdef HPSC_ECC
+        if (w_new_ecc && w_data_size == nand_page_size(s->dev)) { /* save ecc */
+            DB_PRINT("ECC is saved\n");
+            pl35x_ecc_save(s);
+            w_new_ecc = false;
+        } 
+#endif
     }
 
     /* Writing Start cmd.  */

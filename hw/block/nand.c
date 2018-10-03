@@ -1011,7 +1011,11 @@ DB_PRINT_L("start: addr(0x%lx), offset(0x%x), PAGE(addr) = 0x%lx, s->pages = 0x%
                 DB_PRINT_L("read error in sector %" PRIu64 "\n",
                                 PAGE_START(addr) >> 9);
             }
+#ifdef HPSC
+            s->ioaddr = s->io + offset;
+#else
             s->ioaddr = s->io + (PAGE_START(addr) & 0x1ff) + offset;
+#endif
         }
     } else {
         memcpy(s->io, s->storage + PAGE_START(s->addr) +
