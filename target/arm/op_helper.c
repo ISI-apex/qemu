@@ -1106,7 +1106,7 @@ void HELPER(exception_return)(CPUARMState *env)
     int new_el;
     bool return_to_aa64 = (spsr & PSTATE_nRW) == 0;
 
-    assert(return_to_aa64 && !arm_feature(env, ARM_FEATURE_V8R));
+    assert((!return_to_aa64) || (return_to_aa64 && !arm_feature(env, ARM_FEATURE_V8R)));
     aarch64_save_sp(env, cur_el);
 
     arm_clear_exclusive(env);
