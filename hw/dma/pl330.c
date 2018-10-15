@@ -22,7 +22,7 @@
 #include "qemu/log.h"
 
 #ifndef PL330_ERR_DEBUG
-#define PL330_ERR_DEBUG 1
+#define PL330_ERR_DEBUG 0
 #endif
 
 #define DB_PRINT_L(lvl, fmt, args...) do {\
