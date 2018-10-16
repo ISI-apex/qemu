@@ -111,11 +111,12 @@ static void pl35x_ecc_init(PL35xItf *s)
 
 static void pl35x_ecc_save(PL35xItf *s) {
     PL35xState * ps = s->parent;
+    int i, j, shift;
 
         DB_PRINT("ECC : is saved\n");
-    for (int i = 0; i < 4 ; i++) {
+    for (i = 0; i < 4 ; i++) {
         uint32_t r32 = (0x40 << 24);	// always ecc is correct
-        for (int j = 0, shift = 0; j < ECC_BYTES_PER_SUBPAGE; j++) {
+        for (j = 0, shift = 0; j < ECC_BYTES_PER_SUBPAGE; j++) {
             uint8_t r8 = s->ecc_digest[i*ECC_BYTES_PER_SUBPAGE+j];
             r32 |= (~r8 & 0xff) << shift;	// inverse the bits
             shift += 8;
@@ -426,6 +427,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
 {
     PL35xItf *s = opaque;
     unsigned int len = size;
+    int i;
     int shift = 0;
     uint32_t r = 0;
 
@@ -459,14 +461,14 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         buf_count = 0;
     } 
     data_size += size;
-    for (int i = 0; i < size; i++) {
+    for (i = 0; i < size; i++) {
         buff[buf_count++] = (uint8_t) (r >> (i * 8) & 0xff);
         pl35x_ecc_digest(s, (uint8_t) (r >> (i * 8) & 0xff));
     }
     if (data_size == page_size) {	// assume PAGE_SIZE = 2048
 /* dbg */
   printf("--------- data -----------\n");
-  for(int i = 0; i < page_size; i++) {
+  for(i = 0; i < page_size; i++) {
        if (i % 16 == 0) printf("\n 0x%06x: ", i);
        printf("0x%02x ", buff[i]);
     }
