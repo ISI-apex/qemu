@@ -273,7 +273,7 @@ static int gdb_signal_to_target (int sig)
         return -1;
 }
 
-/* #define DEBUG_GDB */
+#define DEBUG_GDB
 
 #ifdef DEBUG_GDB
 # define DEBUG_GDB_GATE 1
@@ -987,13 +987,15 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
         put_packet(s, "OK");
         break;
     case '?':
-        s->cur_cluster = 0;
+        // s->cur_cluster = 0; // TRCH
+        //s->cur_cluster = 1; // RTPS
+        s->cur_cluster = 2; // HPPS
         cl = &s->clusters[s->cur_cluster];
         s->c_cpu = cl->cpus.first;
         s->g_cpu = cl->cpus.first;
         /* TODO: Make this return the correct value for user-mode.  */
         snprintf(buf, sizeof(buf), "T%02xthread:%s;", GDB_SIGNAL_TRAP,
-                 gdb_gen_thread_id(s, s->cur_cluster + 1,
+                 gdb_gen_thread_id(s, /* s->cur_cluster + 1 */ /* TRCH 0 */ /* HPPS: */ 3 /* RTPS: 2 */,
                                    (s->c_cpu->cpu_index + 1)));
         put_packet(s, buf);
         /* Remove all the breakpoints when this query is issued,
@@ -1091,7 +1093,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
                 s->g_cpu = cl->cpus.first;
                 snprintf(buf, sizeof(buf), "T%02xthread:%s;",
                          GDB_SIGNAL_TRAP,
-                         gdb_gen_thread_id(s, cluster,
+                         gdb_gen_thread_id(s, /* cluster */ /* TRCH 0 */ /* HPPS: */ 3 /* RTPS: 2 */,
                                            (s->c_cpu->cpu_index + 1)));
 
                 put_packet(s, buf);
@@ -1265,7 +1267,10 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
     case 'H':
         type = *p++;
         gdb_thread_id(p, &p, &cluster, &thread);
-        cpu = find_cpu(s, cluster, thread);
+        //cpu = find_cpu(s, cluster, thread);
+        // cpu = find_cpu(s, 0, 1); // TRCH
+        cpu = find_cpu(s, 3, 4); // HPPS
+        // cpu = find_cpu(s, 2, 2); // RTPS
         if (cpu == NULL) {
             put_packet(s, "E22");
             break;
@@ -1370,12 +1375,14 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             /* "Current thread" remains vague in the spec, so always return
              *  the first CPU (gdb returns the first thread). */
             snprintf(buf, sizeof(buf), "C%s",
-                     gdb_gen_thread_id(s, s->cur_cluster + 1,
+                     gdb_gen_thread_id(s, /* s->cur_cluster + 1 */ /* TRCH 0 */ /* HPPS: */ 3 /* RTPS: 2 */,
                                        (cl->cpus.first->cpu_index + 1)));
             put_packet(s, buf);
             break;
         } else if (strcmp(p,"fThreadInfo") == 0) {
-            s->query_cluster = 0;
+            // s->query_cluster = 0; // TRCH
+            // s->query_cluster = 1; // RTPS
+            s->query_cluster = 2; // HPPS
             s->query_cpu = s->clusters[s->query_cluster].cpus.first;
             goto report_cpuinfo;
         } else if (strcmp(p,"sThreadInfo") == 0) {
@@ -1386,14 +1393,20 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
                                            (s->query_cpu->cpu_index + 1)));
                 put_packet(s, buf);
                 if (s->query_cpu == s->clusters[s->query_cluster].cpus.last) {
+#if 1
                     s->query_cluster++;
-                    if (s->query_cluster == s->num_clusters) {
+                    //if (s->query_cluster == s->num_clusters) {
+                    if (s->query_cluster == /* TRCH 0 */ /* RTPS 2 */ /* HPPS */ 3) {
                         s->query_cluster = 0;
                     }
                     s->query_cpu = NULL;
                     if (s->clusters[s->query_cluster].attached) {
                         s->query_cpu = s->clusters[s->query_cluster].cpus.first;
                     }
+#else 
+                    s->query_cluster = 0;
+                    s->query_cpu = NULL;
+#endif
                 } else {
                     s->query_cpu = CPU_NEXT(s->query_cpu);
                 }
@@ -1620,7 +1633,7 @@ static void gdb_vm_state_change(void *opaque, int running, RunState state)
             snprintf(buf, sizeof(buf),
                      "T%02xthread:%s;%swatch:" TARGET_FMT_lx ";",
                      GDB_SIGNAL_TRAP,
-                     gdb_gen_thread_id(s, s->cur_cluster + 1,
+                     gdb_gen_thread_id(s, /* s->cur_cluster + 1 */ /* TRCH: 0 */ /* HPPS: */ 3 /* RTPS: 2 */,
                                        (cpu->cpu_index + 1)),
                      type,
                      (target_ulong)cpu->watchpoint_hit->vaddr);
@@ -1657,7 +1670,7 @@ static void gdb_vm_state_change(void *opaque, int running, RunState state)
     }
     gdb_set_stop_cpu(cpu);
     snprintf(buf, sizeof(buf), "T%02xthread:%s;", ret,
-             gdb_gen_thread_id(s, s->cur_cluster + 1, (cpu->cpu_index + 1)));
+             gdb_gen_thread_id(s, /* s->cur_cluster + 1 */ /* TRCH 0 */ /* HPPS: */ 3 /* RTPS: 2 */, (cpu->cpu_index + 1)));
 
 send_packet:
     put_packet(s, buf);
