@@ -138,7 +138,8 @@ static void mem_and(uint8_t *dest, const uint8_t *src, size_t n)
 # define NAND_IO
 
 #define HPSC
-#ifdef HPSC
+#define HPSC_TEST
+#ifdef HPSC_TEST__
 # define PAGE(addr)		((addr) >> PAGE_SHIFT)
 # define PAGE_START(page)	(PAGE(page) * (PAGE_SIZE + OOB_SIZE))
 # define PAGE_MASK		((1 << PAGE_SHIFT) - 1)
@@ -798,9 +799,9 @@ uint32_t nand_getio(DeviceState *dev)
     NANDFlashState *s = NAND(dev);
 
     /* Allow sequential reading */
-DB_PRINT_L("s->cmd(0x%x), s->iolen(0x%x), s->gnd(%d), s->addr(0x%lx), s->addr_shift(%d), s->page_shift(%d), s->oob_shift(%d), initial s->offset (0x%x)\n", s->cmd, s->iolen, s->gnd, s->addr, s->addr_shift, s->page_shift, s->oob_shift, s->offset);
+//DB_PRINT_L("s->cmd(0x%x), s->iolen(0x%x), s->gnd(%d), s->addr(0x%lx), s->addr_shift(%d), s->page_shift(%d), s->oob_shift(%d), initial s->offset (0x%x)\n", s->cmd, s->iolen, s->gnd, s->addr, s->addr_shift, s->page_shift, s->oob_shift, s->offset);
     if (!s->iolen && s->cmd == NAND_CMD_READ0) {
-#ifdef HPSC
+#ifdef HPSC_TEST__
         s->addr = s->addr & (~((1 << s->page_shift) -1));
         offset = (int) (s->addr & ((1 << s->addr_shift) - 1)) + s->offset;
         offset = offset % (1 << s->page_shift) ;
@@ -835,12 +836,12 @@ DB_PRINT_L("return 0, because s->ce(%d) || s->iolen(%d) <= 0), offset = (0x%x) s
      * return the status register value until another command is issued
      */
     if (s->cmd != NAND_CMD_READSTATUS) {
-	DB_PRINT_L("s->cmd(0x%x), s->iolen: before 0x%x after 0x%x\n", s->cmd, s->iolen, s->iolen + s->buswidth);
+//	DB_PRINT_L("s->cmd(0x%x), s->iolen: before 0x%x after 0x%x\n", s->cmd, s->iolen, s->iolen + s->buswidth);
         s->addr   += s->buswidth;
         s->ioaddr += s->buswidth;
         s->iolen  -= s->buswidth;
     }
-DB_PRINT_L("return (0x%2x), s->iolen(0x%x)\n", x, s->iolen);
+//DB_PRINT_L("return (0x%2x), s->iolen(0x%x)\n", x, s->iolen);
     return x;
 }
 
@@ -1006,12 +1007,13 @@ DB_PRINT_L("start: addr(0x%lx), offset(0x%x), PAGE(addr) = 0x%lx, s->pages = 0x%
         } else {
             DB_PRINT_L("ADDR_SHIFT(%d), PAGE(addr) = 0x%lx, PAGE_SIZE(%d), PAGE_START(addr) = 0x%lx\n",
                    ADDR_SHIFT, PAGE(addr), PAGE_SIZE, PAGE_START(addr));
+            /* blk_pread: reads data from PAGE_START(addr) */
             if (blk_pread(s->blk, PAGE_START(addr), s->io,
                           (PAGE_SECTORS + 2) << BDRV_SECTOR_BITS) < 0) {
                 DB_PRINT_L("read error in sector %" PRIu64 "\n",
                                 PAGE_START(addr) >> 9);
             }
-#ifdef HPSC
+#ifdef HPSC_TEST
             s->ioaddr = s->io + offset;
 #else
             s->ioaddr = s->io + (PAGE_START(addr) & 0x1ff) + offset;

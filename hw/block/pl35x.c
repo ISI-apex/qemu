@@ -120,7 +120,7 @@ static void pl35x_ecc_save(PL35xItf *s) {
             uint8_t r8 = s->ecc_digest[i*ECC_BYTES_PER_SUBPAGE+j];
             r32 |= (~r8 & 0xff) << shift;	// inverse the bits
             shift += 8;
-            printf("0x%x ", r8);
+            printf("0x%x ", ~r8 & 0xff);
         }
         int ecc1_block_idx = 0x418 + (i << 2);
         ps->regs[ecc1_block_idx >> 2] = r32;
@@ -434,7 +434,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
 #ifdef HPSC_ECC
     int page_size = nand_page_size(s->dev);
     int nand_remain_data = nand_iolen(s->dev);
-    DB_PRINT("before: nand_iolen = 0x%x\n", nand_remain_data);
+//    DB_PRINT("before: nand_iolen = 0x%x\n", nand_remain_data);
     if (nand_remain_data > 0 && nand_remain_data < 4 && size >= 4) {
 	// previous read_byte didn't clean the buffer.
 	// flush it.
@@ -450,9 +450,9 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         r |= r8 << shift;
         shift += 8;
     }
-    DB_PRINT("addr=0x%x r=0x%x size=%d\n", (unsigned)addr, r, size);
+//    DB_PRINT("addr=0x%x r=0x%x size=%d\n", (unsigned)addr, r, size);
 #ifdef HPSC_ECC
-    DB_PRINT("after: nand_iolen = 0x%x\n", nand_iolen(s->dev));
+//    DB_PRINT("after: nand_iolen = 0x%x\n", nand_iolen(s->dev));
     if (new_ecc) {
         DB_PRINT("New ECC starts\n");
         pl35x_ecc_init(s);
@@ -466,6 +466,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         pl35x_ecc_digest(s, (uint8_t) (r >> (i * 8) & 0xff));
     }
     if (data_size == page_size) {	// assume PAGE_SIZE = 2048
+#ifdef HSPC_DEBUG
 /* dbg */
   printf("--------- data -----------\n");
   for(i = 0; i < page_size; i++) {
@@ -474,10 +475,22 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
     }
   printf("\n");
 /* end dbg */
+#endif
         /* save ecc value to the registers */
         pl35x_ecc_save(s);
+#ifdef HSPC_DEBUG
+   /* debug again */
+    printf("ECC with data in buffer\n");
+    pl35x_ecc_init(s);
+    for(i = 0; i < page_size; i++) {
+      pl35x_ecc_digest(s, (uint8_t)buff[i]);
     }
-    DB_PRINT("return (0x%x)\n", r);
+    pl35x_ecc_save(s);
+    printf("end of ECC with data in buffer\n");
+   /* end debug again */
+#endif
+    }
+//    DB_PRINT("return (0x%x)\n", r);
 #endif
     return r;
 }
@@ -500,12 +513,17 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     start_cmd = (addr >> 3) & 0xff;
     end_cmd = (addr >> 11) & 0xff;
 
-    DB_PRINT("addr=%x v=%x size=%d, data_phase(0x%x), ecmd_vali(0x%x), start_cmd(0x%x), end_cmd(0x%x)\n", (unsigned)addr, (unsigned)value, size, data_phase, ecmd_valid, start_cmd, end_cmd);
+    DB_PRINT("addr=%x v32=%x v64=%lx size=%d, data_phase(0x%x), ecmd_vali(0x%x), start_cmd(0x%x), end_cmd(0x%x)\n", (unsigned)addr, (unsigned)value, value64, size, data_phase, ecmd_valid, start_cmd, end_cmd);
 
     if (!data_phase) {
         addr_cycles = (addr >> 21) & 7;
     }
 
+#ifdef HPSC__
+	// TODO: For temporary fixup
+	// To fix this problem, Qemu must send ONFI compatible information to Linux
+    if (!addr_cycles)    addr_cycles = 4;	
+#endif
     if (!data_phase) {
         DB_PRINT("start_cmd=%x end_cmd=%x (valid=%d) acycl=%d\n",
                 start_cmd, end_cmd, ecmd_valid, addr_cycles);
@@ -553,7 +571,9 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         nand_setpins(s->dev, 1, 0, 0, 1, 0);
         nand_setio(s->dev, start_cmd);
     }
-
+    else {
+    DB_PRINT("Start data phase or pending address cycles\n");
+    }
     if (!addr_cycles) {
         s->nand_pending_addr_cycles = 0;
     }
@@ -572,7 +592,14 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         nandaddr >>= 8;
         addr_cycles--;
     }
-
+#ifdef HPSC__
+    if (s->nand_pending_addr_cycles == 1) {
+        s->nand_pending_addr_cycles = 0;
+        nand_setpins(s->dev, 0, 1, 0, 1, 0);
+        DB_PRINT("nand cycl=%d addr=%x\n", 5, (unsigned int)((value64 >> 32) & 0xff));
+        nand_setio(s->dev, (value64 >> 32) & 0xff);
+    }
+#endif
     /* Writing commands. One or two (Start and End).  */
     if (ecmd_valid && !s->nand_pending_addr_cycles) {
     DB_PRINT("writing commands. One or two (Start and End)\n");
