@@ -30,21 +30,12 @@
 #define NAND_ERR_DEBUG 1
 #endif
 
-#ifdef ORG
 #define DB_PRINT_L(...) do { \
     if (NAND_ERR_DEBUG) { \
         qemu_log_mask(DEV_LOG_NAND, ": %s: ", __func__); \
         qemu_log_mask(DEV_LOG_NAND, ## __VA_ARGS__); \
     } \
 } while (0);
-#else
-#define DB_PRINT_L(...) do { \
-    if (NAND_ERR_DEBUG) { \
-        fprintf(stderr, ": %s: ", __func__); \
-        fprintf(stderr, ## __VA_ARGS__); \
-    } \
-} while (0);
-#endif
 
 # define NAND_CMD_READ0		0x00
 # define NAND_CMD_READ1		0x01
@@ -138,16 +129,9 @@ static void mem_and(uint8_t *dest, const uint8_t *src, size_t n)
 # define NAND_IO
 
 #define HPSC
-#define HPSC_TEST
-#ifdef HPSC_TEST__
-# define PAGE(addr)		((addr) >> PAGE_SHIFT)
-# define PAGE_START(page)	(PAGE(page) * (PAGE_SIZE + OOB_SIZE))
-# define PAGE_MASK		((1 << PAGE_SHIFT) - 1)
-#else
 # define PAGE(addr)		((addr) >> ADDR_SHIFT)
 # define PAGE_START(page)	(PAGE(page) * (PAGE_SIZE + OOB_SIZE))
 # define PAGE_MASK		((1 << ADDR_SHIFT) - 1)
-#endif
 
 # define OOB_SHIFT		(PAGE_SHIFT - 5)
 # define OOB_SIZE		(1 << OOB_SHIFT)
@@ -406,7 +390,6 @@ static void nand_command(NANDFlashState *s)
 {
     int i, j;
     unsigned int offset;
-DB_PRINT_L("cmd = 0x%x, s->iolen = 0x%x\n", s->cmd, s->iolen);
     switch (s->cmd) {
     case NAND_CMD_READ0:
         s->iolen = 0;
@@ -501,9 +484,8 @@ DB_PRINT_L("cmd = 0x%x, s->iolen = 0x%x\n", s->cmd, s->iolen);
         break;
 
     default:
-        DB_PRINT_L("%s: Unknown NAND command 0x%02x\n", __FUNCTION__, s->cmd);
+        printf("%s: Unknown NAND command 0x%02x\n", __FUNCTION__, s->cmd);
     }
-DB_PRINT_L("ends: cmd = 0x%x, s->iolen = 0x%x\n", s->cmd, s->iolen);
 }
 
 static int nand_pre_save(void *opaque)
@@ -654,7 +636,6 @@ uint32_t nand_iolen(DeviceState * opaque)
    NANDFlashState *s = NAND(opaque);
    return s->iolen;
 }
-
 #endif
 /*
  * Chip inputs are CLE, ALE, CE, WP, GND and eight I/O pins.  Chip
@@ -689,7 +670,6 @@ void nand_setio(DeviceState *dev, uint32_t value)
     int i;
     NANDFlashState *s = NAND(dev);
 
-DB_PRINT_L("start: cmd = 0x%x, value = 0x%x, s->iolen = 0x%x\n", s->cmd, value, s->iolen);
 
     if (!s->ce && s->cle) {
         if (nand_flash_ids[s->chip_id].options & NAND_SAMSUNG_LP) {
@@ -728,7 +708,6 @@ DB_PRINT_L("start: cmd = 0x%x, value = 0x%x, s->iolen = 0x%x\n", s->cmd, value, 
         }
     }
 
-DB_PRINT_L("cmd = 0x%x, s->ale = %d, s->cle = %d\n", s->cmd, s->ale, s->cle);
     if (s->ale) {
         unsigned int shift = s->addrlen * 8;
         uint64_t mask = ~(0xffull << shift);
@@ -789,7 +768,6 @@ DB_PRINT_L("cmd = 0x%x, s->ale = %d, s->cle = %d\n", s->cmd, s->ale, s->cle);
             }
         }
     }
-DB_PRINT_L("ends: cmd = 0x%x, s->ale = %d, s->cle = %d, s->iolen = 0x%x\n", s->cmd, s->ale, s->cle, s->iolen);
 }
 
 uint32_t nand_getio(DeviceState *dev)
@@ -799,33 +777,18 @@ uint32_t nand_getio(DeviceState *dev)
     NANDFlashState *s = NAND(dev);
 
     /* Allow sequential reading */
-//DB_PRINT_L("s->cmd(0x%x), s->iolen(0x%x), s->gnd(%d), s->addr(0x%lx), s->addr_shift(%d), s->page_shift(%d), s->oob_shift(%d), initial s->offset (0x%x)\n", s->cmd, s->iolen, s->gnd, s->addr, s->addr_shift, s->page_shift, s->oob_shift, s->offset);
     if (!s->iolen && s->cmd == NAND_CMD_READ0) {
-#ifdef HPSC_TEST__
-        s->addr = s->addr & (~((1 << s->page_shift) -1));
         offset = (int) (s->addr & ((1 << s->addr_shift) - 1)) + s->offset;
-        offset = offset % (1 << s->page_shift) ;
-#else
-        offset = (int) (s->addr & ((1 << s->addr_shift) - 1)) + s->offset;
-#endif
         s->offset = 0;
 
         s->blk_load(s, s->addr, offset);
-#ifdef HPSC__
-        if (s->gnd)
-            s->iolen = (1 << s->page_shift) - ( offset % (1 << s->page_shift)) ;
-        else
-            s->iolen = (1 << s->page_shift) + (1 << s->oob_shift) - (offset % (1 << s->page_shift));
-#else
         if (s->gnd)
             s->iolen = (1 << s->page_shift) - offset;
         else
             s->iolen = (1 << s->page_shift) + (1 << s->oob_shift) - offset;
-#endif
     }
 
     if (s->ce || s->iolen <= 0) {
-DB_PRINT_L("return 0, because s->ce(%d) || s->iolen(%d) <= 0), offset = (0x%x) s->ioaddr[0x%2x, 0x%2x, 0x%2x, 0x%2x]\n", s->ce, s->iolen, offset, s->ioaddr[0], s->ioaddr[1], s->ioaddr[2], s->ioaddr[3]);
         return 0;
     }
 
@@ -836,12 +799,10 @@ DB_PRINT_L("return 0, because s->ce(%d) || s->iolen(%d) <= 0), offset = (0x%x) s
      * return the status register value until another command is issued
      */
     if (s->cmd != NAND_CMD_READSTATUS) {
-//	DB_PRINT_L("s->cmd(0x%x), s->iolen: before 0x%x after 0x%x\n", s->cmd, s->iolen, s->iolen + s->buswidth);
         s->addr   += s->buswidth;
         s->ioaddr += s->buswidth;
         s->iolen  -= s->buswidth;
     }
-//DB_PRINT_L("return (0x%2x), s->iolen(0x%x)\n", x, s->iolen);
     return x;
 }
 
@@ -890,7 +851,7 @@ static void glue(nand_blk_write_, PAGE_SIZE)(NANDFlashState *s)
         soff = SECTOR_OFFSET(s->addr);
         if (blk_pread(s->blk, sector << BDRV_SECTOR_BITS, iobuf,
                       PAGE_SECTORS << BDRV_SECTOR_BITS) < 0) {
-            DB_PRINT_L("read error in sector %" PRIu64 "\n", sector);
+            printf("read error in sector %" PRIu64 "\n", sector);
             return;
         }
 
@@ -903,7 +864,7 @@ static void glue(nand_blk_write_, PAGE_SIZE)(NANDFlashState *s)
 
         if (blk_pwrite(s->blk, sector << BDRV_SECTOR_BITS, iobuf,
                        PAGE_SECTORS << BDRV_SECTOR_BITS, 0) < 0) {
-            DB_PRINT_L("write error in sector %" PRIu64 "\n", sector);
+            printf("write error in sector %" PRIu64 "\n", sector);
         }
     } else {
         off = PAGE_START(s->addr) + (s->addr & PAGE_MASK) + s->offset;
@@ -911,7 +872,7 @@ static void glue(nand_blk_write_, PAGE_SIZE)(NANDFlashState *s)
         soff = off & 0x1ff;
         if (blk_pread(s->blk, sector << BDRV_SECTOR_BITS, iobuf,
                       (PAGE_SECTORS + 2) << BDRV_SECTOR_BITS) < 0) {
-            DB_PRINT_L("read error in sector %" PRIu64 "\n", sector);
+            printf("read error in sector %" PRIu64 "\n", sector);
             return;
         }
 
@@ -919,7 +880,7 @@ static void glue(nand_blk_write_, PAGE_SIZE)(NANDFlashState *s)
 
         if (blk_pwrite(s->blk, sector << BDRV_SECTOR_BITS, iobuf,
                        (PAGE_SECTORS + 2) << BDRV_SECTOR_BITS, 0) < 0) {
-            DB_PRINT_L("write error in sector %" PRIu64 "\n", sector);
+            printf("write error in sector %" PRIu64 "\n", sector);
         }
     }
     s->offset = 0;
@@ -947,19 +908,19 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
         for (; i < page; i ++)
             if (blk_pwrite(s->blk, i << BDRV_SECTOR_BITS, iobuf,
                            BDRV_SECTOR_SIZE, 0) < 0) {
-                DB_PRINT_L("write error in sector %" PRIu64 "\n", i);
+                printf("write error in sector %" PRIu64 "\n", i);
             }
     } else {
         addr = PAGE_START(addr);
         page = addr >> 9;
         if (blk_pread(s->blk, page << BDRV_SECTOR_BITS, iobuf,
                       BDRV_SECTOR_SIZE) < 0) {
-            DB_PRINT_L("read error in sector %" PRIu64 "\n", page);
+            printf("read error in sector %" PRIu64 "\n", page);
         }
         memset(iobuf + (addr & 0x1ff), 0xff, (~addr & 0x1ff) + 1);
         if (blk_pwrite(s->blk, page << BDRV_SECTOR_BITS, iobuf,
                        BDRV_SECTOR_SIZE, 0) < 0) {
-            DB_PRINT_L("write error in sector %" PRIu64 "\n", page);
+            printf("write error in sector %" PRIu64 "\n", page);
         }
 
         memset(iobuf, 0xff, 0x200);
@@ -967,7 +928,7 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
         for (addr += ((PAGE_SIZE + OOB_SIZE) << s->erase_shift) - 0x200;
                         i < addr; i += 0x200) {
             if (blk_pwrite(s->blk, i, iobuf, BDRV_SECTOR_SIZE, 0) < 0) {
-                DB_PRINT_L("write error in sector %" PRIu64 "\n",
+                printf("write error in sector %" PRIu64 "\n",
                        i >> 9);
             }
         }
@@ -975,12 +936,12 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
         page = i >> 9;
         if (blk_pread(s->blk, page << BDRV_SECTOR_BITS, iobuf,
                       BDRV_SECTOR_SIZE) < 0) {
-            DB_PRINT_L("read error in sector %" PRIu64 "\n", page);
+            printf("read error in sector %" PRIu64 "\n", page);
         }
         memset(iobuf, 0xff, ((addr - 1) & 0x1ff) + 1);
         if (blk_pwrite(s->blk, page << BDRV_SECTOR_BITS, iobuf,
                        BDRV_SECTOR_SIZE, 0) < 0) {
-            DB_PRINT_L("write error in sector %" PRIu64 "\n", page);
+            printf("write error in sector %" PRIu64 "\n", page);
         }
     }
 }
@@ -988,7 +949,6 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
 static void glue(nand_blk_load_, PAGE_SIZE)(NANDFlashState *s,
                 uint64_t addr, int offset)
 {
-DB_PRINT_L("start: addr(0x%lx), offset(0x%x), PAGE(addr) = 0x%lx, s->pages = 0x%x, s->blk(%p), s->mem_oob(0x%x), s->iolen(0x%x)\n", addr, offset, PAGE(addr), s->pages, s->blk, s->mem_oob, s->iolen);
     if (PAGE(addr) >= s->pages) {
         return;
     }
@@ -997,7 +957,7 @@ DB_PRINT_L("start: addr(0x%lx), offset(0x%x), PAGE(addr) = 0x%lx, s->pages = 0x%
         if (s->mem_oob) {
             if (blk_pread(s->blk, SECTOR(addr) << BDRV_SECTOR_BITS, s->io,
                           PAGE_SECTORS << BDRV_SECTOR_BITS) < 0) {
-                DB_PRINT_L("read error in sector %" PRIu64 "\n",
+                printf("read error in sector %" PRIu64 "\n",
                                 SECTOR(addr));
             }
             memcpy(s->io + SECTOR_OFFSET(s->addr) + PAGE_SIZE,
@@ -1005,15 +965,13 @@ DB_PRINT_L("start: addr(0x%lx), offset(0x%x), PAGE(addr) = 0x%lx, s->pages = 0x%
                             OOB_SIZE);
             s->ioaddr = s->io + SECTOR_OFFSET(s->addr) + offset;
         } else {
-            DB_PRINT_L("ADDR_SHIFT(%d), PAGE(addr) = 0x%lx, PAGE_SIZE(%d), PAGE_START(addr) = 0x%lx\n",
-                   ADDR_SHIFT, PAGE(addr), PAGE_SIZE, PAGE_START(addr));
             /* blk_pread: reads data from PAGE_START(addr) */
             if (blk_pread(s->blk, PAGE_START(addr), s->io,
                           (PAGE_SECTORS + 2) << BDRV_SECTOR_BITS) < 0) {
-                DB_PRINT_L("read error in sector %" PRIu64 "\n",
+                printf("read error in sector %" PRIu64 "\n",
                                 PAGE_START(addr) >> 9);
             }
-#ifdef HPSC_TEST
+#ifdef HPSC
             s->ioaddr = s->io + offset;
 #else
             s->ioaddr = s->io + (PAGE_START(addr) & 0x1ff) + offset;
