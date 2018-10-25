@@ -40,7 +40,6 @@
 #include "sysemu/blockdev.h"
 #endif
 
-#define PL35X_ERR_DEBUG
 #ifdef PL35X_ERR_DEBUG
 #define DB_PRINT(...) do { \
     fprintf(stderr,  ": %s: ", __func__); \
@@ -113,21 +112,18 @@ static void pl35x_ecc_save(PL35xItf *s) {
     PL35xState * ps = s->parent;
     int i, j, shift;
 
-        DB_PRINT("ECC : is saved\n");
     for (i = 0; i < 4 ; i++) {
         uint32_t r32 = (0x40 << 24);	// always ecc is correct
         for (j = 0, shift = 0; j < ECC_BYTES_PER_SUBPAGE; j++) {
             uint8_t r8 = s->ecc_digest[i*ECC_BYTES_PER_SUBPAGE+j];
             r32 |= (~r8 & 0xff) << shift;	// inverse the bits
             shift += 8;
-            printf("0x%x ", ~r8 & 0xff);
         }
         int ecc1_block_idx = 0x418 + (i << 2);
         ps->regs[ecc1_block_idx >> 2] = r32;
     }
     DB_PRINT("@0x418 = 0x%08x, @0x41c = 0x%08x, @0x420 = 0x%08x, @0x424 = 0x%08x\n",
        ps->regs[0x418 >>2], ps->regs[0x41c >>2], ps->regs[0x420 >>2], ps->regs[0x424 >>2]);
-    printf("\n");
 }
 
 int	buf_count = 0;
@@ -152,76 +148,6 @@ static void pl35x_ecc_digest(PL35xItf *s, uint8_t data)
 }
 #endif
 
-#ifdef HPSC_ECC__
-#define #define R_ECC_SLC_MLC (1 << 25)
-/* code borrowd from Arasan NFC */
-static void hpsc_ecc_init(PL35xState *s)
-{
-    /* FIXME: Bad performance */
-    memset(s->ecc_digest, 0xFF, 16 * 1024);
-    s->ecc_pos = 0;
-    s->ecc_subpage_offset = 0;
-}
-
-/* not an ECC algorithm, but gives a deterministic OOB that
- * depends on the in band data
- */
-
-static void hpsc_ecc_digest(PL35xState *s, uint8_t data)
-{
-    uint32_t page_size = 512; /* PL35x RTM page 2-11 */
-    int ecc_bytes_per_subpage = DEP_AF_EX32(s->regs, ECC, ECC_SIZE) /
-                                (page_size / ECC_CODEWORD_SIZE);
-
-    s->ecc_digest[s->ecc_pos++] ^= ~data;
-    if (!(s->ecc_pos % ecc_bytes_per_subpage)) {
-        s->ecc_pos -= ecc_bytes_per_subpage;
-    }
-
-    s->ecc_subpage_offset++;
-    if (s->ecc_subpage_offset == ECC_CODEWORD_SIZE) {
-        s->ecc_subpage_offset = 0;
-        do {
-            s->ecc_pos++;
-        } while (s->ecc_pos % ecc_bytes_per_subpage);
-    }
-}
-
-static bool hpsc_ecc_correct(PL35xState *s)
-{
-    int i;
-    uint8_t cef = 0;
-
-    for (i = 0; i < DEP_AF_EX32(s->regs, ECC, ECC_SIZE); ++i) {
-        if (s->ecc_oob[i] != s->ecc_digest[i]) {
-            arasan_nfc_irq_event(s, R_INT_MUL_BIT_ERR);
-            if (DEP_AF_EX32(s->regs, ECC_ERR_COUNT, PAGE_BOUND) != 0xFF) {
-                s->regs[R_ECC_ERR_COUNT] +=
-                    1 << R_ECC_ERR_COUNT_PAGE_BOUND_SHIFT;
-            }
-            /* FIXME: All errors in the first packet - not right */
-            if (DEP_AF_EX32(s->regs, ECC_ERR_COUNT, PACKET_BOUND) != 0xFF) {
-                s->regs[R_ECC_ERR_COUNT] +=
-                    1 << R_ECC_ERR_COUNT_PACKET_BOUND_SHIFT;
-            }
-            DB_PRINT("ECC check failed on ECC byte %#x, %#02" PRIx8 " != %#02"
-                     PRIx8 "\n", i, s->ecc_oob[i], s->ecc_digest[i]);
-            return true;
-        } else {
-            cef ^= s->ecc_oob[i];
-        }
-    }
-    /* Fake random successful single bit corrections for hamming */
-    for (i = 0; i < 7; ++i) {
-        cef = (cef >> 1) ^ (cef & 0x1);
-    }
-    if ((cef & 0x1) && ((s->regs[R_ECC] & R_ECC_SLC_MLC))) {
-        arasan_nfc_irq_event(s, R_INT_ERR_INTRPT);
-    }
-    DB_PRINT("ECC check passed");
-    return false;
-}
-#endif
 static int first = 1;
 static uint64_t pl35x_read(void *opaque, hwaddr addr,
                          unsigned int size)
@@ -450,9 +376,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         r |= r8 << shift;
         shift += 8;
     }
-//    DB_PRINT("addr=0x%x r=0x%x size=%d\n", (unsigned)addr, r, size);
 #ifdef HPSC_ECC
-//    DB_PRINT("after: nand_iolen = 0x%x\n", nand_iolen(s->dev));
     if (new_ecc) {
         DB_PRINT("New ECC starts\n");
         pl35x_ecc_init(s);
@@ -466,31 +390,9 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         pl35x_ecc_digest(s, (uint8_t) (r >> (i * 8) & 0xff));
     }
     if (data_size == page_size) {	// assume PAGE_SIZE = 2048
-#ifdef HSPC_DEBUG
-/* dbg */
-  printf("--------- data -----------\n");
-  for(i = 0; i < page_size; i++) {
-       if (i % 16 == 0) printf("\n 0x%06x: ", i);
-       printf("0x%02x ", buff[i]);
-    }
-  printf("\n");
-/* end dbg */
-#endif
         /* save ecc value to the registers */
         pl35x_ecc_save(s);
-#ifdef HSPC_DEBUG
-   /* debug again */
-    printf("ECC with data in buffer\n");
-    pl35x_ecc_init(s);
-    for(i = 0; i < page_size; i++) {
-      pl35x_ecc_digest(s, (uint8_t)buff[i]);
     }
-    pl35x_ecc_save(s);
-    printf("end of ECC with data in buffer\n");
-   /* end debug again */
-#endif
-    }
-//    DB_PRINT("return (0x%x)\n", r);
 #endif
     return r;
 }
@@ -531,7 +433,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         switch(start_cmd) {
             case 0x80 : /* NAND_CMD_PAGEPROGRAM1 */
                 w_new_ecc = true;
-                DB_PRINT("New ECC starts\n");
+                DB_PRINT("New write ECC starts\n");
                 pl35x_ecc_init(s);
                 w_data_size = 0;
                 break;
@@ -592,14 +494,6 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         nandaddr >>= 8;
         addr_cycles--;
     }
-#ifdef HPSC__
-    if (s->nand_pending_addr_cycles == 1) {
-        s->nand_pending_addr_cycles = 0;
-        nand_setpins(s->dev, 0, 1, 0, 1, 0);
-        DB_PRINT("nand cycl=%d addr=%x\n", 5, (unsigned int)((value64 >> 32) & 0xff));
-        nand_setio(s->dev, (value64 >> 32) & 0xff);
-    }
-#endif
     /* Writing commands. One or two (Start and End).  */
     if (ecmd_valid && !s->nand_pending_addr_cycles) {
     DB_PRINT("writing commands. One or two (Start and End)\n");
