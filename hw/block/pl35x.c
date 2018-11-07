@@ -34,11 +34,11 @@
 #include "qemu/host-utils.h"
 #include "hw/sysbus.h"
 
-#define HPSC 
-#ifdef HPSC
-#include "hw/register-dep.h"
 #include "sysemu/blockdev.h"
-#endif
+
+#define ECC_BYTES_PER_SUBPAGE 3
+#define ECC_CODEWORD_SIZE 512
+
 
 #ifdef PL35X_ERR_DEBUG
 #define DB_PRINT(...) do { \
@@ -54,18 +54,21 @@
 #define PL35X(obj) \
      OBJECT_CHECK(PL35xState, (obj), TYPE_PL35X)
 
-#define HPSC_ECC
 
 typedef struct PL35xItf {
     MemoryRegion mm;
     DeviceState *dev;
     uint8_t nand_pending_addr_cycles;
-#ifdef HPSC_ECC
     uint8_t ecc_digest[16 * 1024];
     uint8_t ecc_oob[16 * 1024];
     uint32_t ecc_pos, ecc_subpage_offset;
     void * parent;
-#endif
+    uint32_t ecc_r_data_size;
+    uint32_t ecc_w_data_size;
+    bool r_new_ecc;
+    bool w_new_ecc;
+    uint32_t buf_count;
+    uint8_t buff[2048];
  
 } PL35xItf;
 
@@ -81,24 +84,23 @@ typedef struct PL35xState {
     /* FIXME: add Interrupt support */
 
     /* FIXME: add ECC support */
-#ifdef HPSC_ECC
     uint32_t regs[0x450 >> 2];
-#else
-    uint32_t configs[10];	/* 0x0, ..., 0x24 */ 
-    uint32_t cycles[8];	/* 0x100, 120, ... 1E0 */ 
-    uint32_t ecc[2][11];	/* 0x300, 304, 308, 30c, 310, 314, .., 328 */ 
-				/* 0x400, 404, 408, 40c, 410, 414, .., 428 */
-#endif
 
     uint8_t x; /* the "x" in pl35x */
 } PL35xState;
 
-#ifdef HPSC_ECC
-#define ECC_BYTES_PER_SUBPAGE 3
-#define ECC_CODEWORD_SIZE 512
+static void pl35x_reset(DeviceState *dev)
+{
+    PL35xState *s = PL35X(dev);
+    if (!s->itf[1].mm.container)
+        memory_region_add_subregion(s->mmio.container, 0x600000000, &s->itf[1].mm);
+    s->itf[1].ecc_r_data_size = 0;
+    s->itf[1].ecc_w_data_size = 0;
+    s->itf[1].r_new_ecc = false;
+    s->itf[1].w_new_ecc = false;
 
-static bool new_ecc = false;
-static bool w_new_ecc = false;
+}
+
 static void pl35x_ecc_init(PL35xItf *s)
 {
     /* FIXME: Bad performance */
@@ -126,8 +128,6 @@ static void pl35x_ecc_save(PL35xItf *s) {
        ps->regs[0x418 >>2], ps->regs[0x41c >>2], ps->regs[0x420 >>2], ps->regs[0x424 >>2]);
 }
 
-int	buf_count = 0;
-uint8_t buff[2048];
 
 static void pl35x_ecc_digest(PL35xItf *s, uint8_t data)
 {
@@ -146,20 +146,12 @@ static void pl35x_ecc_digest(PL35xItf *s, uint8_t data)
         } while (s->ecc_pos % ecc_bytes_per_subpage);
     }
 }
-#endif
 
-static int first = 1;
 static uint64_t pl35x_read(void *opaque, hwaddr addr,
                          unsigned int size)
 {
     PL35xState *s = opaque;
     uint32_t r = 0;
-#ifdef HPSC
-    if (first) {
-    memory_region_add_subregion(s->mmio.container, 0x600000000, &s->itf[1].mm);
-    first = 0;
-    }
-#endif
     switch (addr) {
     case 0x0:
       {
@@ -180,12 +172,7 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     case 0x4:
     case 0x20:
     case 0x24:
-#ifdef HPSC_ECC
          r = s->regs[addr >> 2];
-#else
-         r = s->configs[addr >> 2]; 
-#endif
-#ifdef HPSC
     case 0x100:
     case 0x120:
     case 0x140:
@@ -194,11 +181,7 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     case 0x1a0:
     case 0x1c0:
     case 0x1e0: {
-#ifdef HPSC_ECC
          r = s->regs[addr >> 2];
-#else
-	r = s->cycles[(addr & 0xf0) >> 5];
-#endif
 	break;
     }
     case 0x300:
@@ -220,35 +203,15 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     case 0x414:
         r = s->regs[addr >> 2];
         break;
-#ifdef HPSC_ECC
     case 0x418: 
     case 0x41c:
     case 0x420:
     case 0x424:
         r = s->regs[addr >> 2];
         break;
-#else
-    case 0x418: /* how about calculate it now? */
-                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
-                r = s->regs[addr >> 2];
-		break;
-    case 0x41c:
-                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
-                r = s->regs[addr >> 2];
-		break;
-    case 0x420:
-                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
-                r = s->regs[addr >> 2];
-		break;
-    case 0x424:
-                s->regs[addr >> 2] = 0x50 << 24; /* | (ecc_calculate() & 0x00ffffff); */
-                r = s->regs[addr >> 2];
-		break;
-#endif
     case 0x428:
         r = s->regs[addr >> 2];
 	break;
-#endif
     default:
         DB_PRINT("Unimplemented SMC read access reg=" TARGET_FMT_plx "\n",
                  addr);
@@ -262,7 +225,6 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
                       unsigned int size)
 {
     DB_PRINT("=== addr = 0x%x v = 0x%x\n", (unsigned)addr, (unsigned)value64);
-#ifdef HPSC
     PL35xState *s = opaque;
     switch (addr) {
     case 0x8:
@@ -273,11 +235,7 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
     case 0x1c:
     case 0x20:
     case 0x24:
-#ifdef HPSC_ECC
         s->regs[addr >> 2] = value64;
-#else
-         s->configs[addr >> 2] = value64;
-#endif
         break;
     case 0x100:
     case 0x120:
@@ -287,11 +245,7 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
     case 0x1a0:
     case 0x1c0:
     case 0x1e0: {
-#ifdef HPSC_ECC
         s->regs[addr >> 2] = value64;
-#else
-	s->cycles[(addr & 0xf0) >> 5] = value64;
-#endif
 	break;
     }
     case 0x300:
@@ -316,11 +270,7 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
     case 0x420:
     case 0x424:
     case 0x428: {
-#ifdef HPSC_ECC
         s->regs[addr >> 2] = value64;
-#else
-        s->ecc[(addr &0x400) >> 10][(addr & 0xf) >> 2] = value64;
-#endif
 	break;
     }
     default:
@@ -328,11 +278,6 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
                  addr);
         break;
     }
-#else
-    /* FIXME: implement */
-    DB_PRINT("Unimplemented SMC write access reg=" TARGET_FMT_plx "\n",
-                 addr);
-#endif
 }
 
 static const MemoryRegionOps pl35x_ops = {
@@ -345,9 +290,6 @@ static const MemoryRegionOps pl35x_ops = {
     }
 };
 
-#ifdef HPSC_ECC
-    int data_size = 0;
-#endif
 static uint64_t nand_read(void *opaque, hwaddr addr,
                            unsigned int size)
 {
@@ -357,10 +299,12 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
     int shift = 0;
     uint32_t r = 0;
 
-#ifdef HPSC_ECC
+    /* No nand device present */
+    if (s->dev == NULL) 
+        return 0x0;
+
     int page_size = nand_page_size(s->dev);
     int nand_remain_data = nand_iolen(s->dev);
-//    DB_PRINT("before: nand_iolen = 0x%x\n", nand_remain_data);
     if (nand_remain_data > 0 && nand_remain_data < 4 && size >= 4) {
 	// previous read_byte didn't clean the buffer.
 	// flush it.
@@ -368,7 +312,6 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
             nand_getio(s->dev);
         }
     }
-#endif
     while (len--) {
         uint8_t r8;
 
@@ -376,28 +319,25 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         r |= r8 << shift;
         shift += 8;
     }
-#ifdef HPSC_ECC
-    if (new_ecc) {
+    if (s->r_new_ecc) {
         DB_PRINT("New ECC starts\n");
         pl35x_ecc_init(s);
-        data_size = 0;
-        new_ecc = false;
-        buf_count = 0;
+        s->ecc_r_data_size = 0;
+        s->r_new_ecc = false;
+        s->buf_count = 0;
     } 
-    data_size += size;
+    s->ecc_r_data_size += size;
     for (i = 0; i < size; i++) {
-        buff[buf_count++] = (uint8_t) (r >> (i * 8) & 0xff);
+        s->buff[s->buf_count++] = (uint8_t) (r >> (i * 8) & 0xff);
         pl35x_ecc_digest(s, (uint8_t) (r >> (i * 8) & 0xff));
     }
-    if (data_size == page_size) {	// assume PAGE_SIZE = 2048
+    if (s->ecc_r_data_size == page_size) {	// assume PAGE_SIZE = 2048
         /* save ecc value to the registers */
         pl35x_ecc_save(s);
     }
-#endif
     return r;
 }
 
-static int w_data_size = 0;
 static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
                        unsigned int size)
 {
@@ -408,6 +348,9 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     uint32_t value = value64;
     uint32_t nandaddr = value;
 
+    /* No nand device present */
+    if (s->dev == NULL) 
+        return;
 
     /* Decode the various signals.  */
     data_phase = (addr >> 19) & 1;
@@ -421,26 +364,19 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         addr_cycles = (addr >> 21) & 7;
     }
 
-#ifdef HPSC__
-	// TODO: For temporary fixup
-	// To fix this problem, Qemu must send ONFI compatible information to Linux
-    if (!addr_cycles)    addr_cycles = 4;	
-#endif
     if (!data_phase) {
         DB_PRINT("start_cmd=%x end_cmd=%x (valid=%d) acycl=%d\n",
                 start_cmd, end_cmd, ecmd_valid, addr_cycles);
-#ifdef HPSC_ECC
         switch(start_cmd) {
             case 0x80 : /* NAND_CMD_PAGEPROGRAM1 */
-                w_new_ecc = true;
+                s->w_new_ecc = true;
                 DB_PRINT("New write ECC starts\n");
                 pl35x_ecc_init(s);
-                w_data_size = 0;
+                s->ecc_w_data_size = 0;
                 break;
             default:
                 break;
         }
-#endif
     }
 
     /* Writing data to the NAND.  */
@@ -449,22 +385,18 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         nand_setpins(s->dev, 0, 0, 0, 1, 0);
         while (size--) {
             nand_setio(s->dev, value & 0xff);
-#ifdef HPSC_ECC
-            if (w_new_ecc) {
-		assert(w_data_size <= nand_page_size(s->dev));
+            if (s->w_new_ecc) {
+		assert(s->ecc_w_data_size <= nand_page_size(s->dev));
                 pl35x_ecc_digest(s, (uint8_t) (value & 0xff));
-                w_data_size++;
+                s->ecc_w_data_size++;
             }
-#endif
             value >>= 8;
         }
-#ifdef HPSC_ECC
-        if (w_new_ecc && w_data_size == nand_page_size(s->dev)) { /* save ecc */
+        if (s->w_new_ecc && s->ecc_w_data_size == nand_page_size(s->dev)) { /* save ecc */
             DB_PRINT("ECC is saved\n");
             pl35x_ecc_save(s);
-            w_new_ecc = false;
+            s->w_new_ecc = false;
         } 
-#endif
     }
 
     /* Writing Start cmd.  */
@@ -499,9 +431,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     DB_PRINT("writing commands. One or two (Start and End)\n");
         nand_setpins(s->dev, 1, 0, 0, 1, 0);
         nand_setio(s->dev, end_cmd);
-#ifdef HPSC_ECC
-	new_ecc = true;
-#endif
+	s->r_new_ecc = true;
     }
 }
 
@@ -532,33 +462,19 @@ static void pl35x_init_sram(SysBusDevice *dev, PL35xItf *itf)
 
 static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
 {
-#ifdef HPSC
-//    DriveInfo *dinfo = drive_get_next(IF_MTD); 
     DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
-    /* d Must be a NAND flash */
     if (dinfo) {
-#ifdef HPSC
         itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
                                NAND_MFR_MICRON, 0xaa);	/* from drivers/mtd/nand/nand_ids.c, MiB */
-//                               NAND_MFR_MICRON, 0xda);	/* from drivers/mtd/nand/nand_ids.c, MiB */
-//                               NAND_MFR_MICRON, 0xA2);	/* from drivers/mtd/nand/nand_ids.c, 512MiB */
-#else
-        itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
-                               NAND_MFR_MICRON, 0x44);
-#endif
+        assert(object_dynamic_cast(OBJECT(itf->dev), "nand"));
     } else {
-	return;
+        itf->dev = NULL; 
     }
-#endif
-    assert(object_dynamic_cast(OBJECT(itf->dev), "nand"));
 
+    // Still memory init is needed not to generate "Unassigned memory access"
     memory_region_init_io(&itf->mm, OBJECT(dev), &nand_ops, itf, "pl35x.nand",
-                          1 << 24);
+                          1 << 28); // 256 GB NAND
     sysbus_init_mmio(dev, &itf->mm);
-#ifdef HPSC__
-    PL35xState *s = PL35X(dev);
-    memory_region_add_subregion(&s->mmio, 0x1000, &itf->mm);
-#endif
 }
 
 static int pl35x_init(SysBusDevice *dev)
@@ -578,10 +494,8 @@ static int pl35x_init(SysBusDevice *dev)
     } else if (s->x == 4) { /* PL354 has a second SRAM */
         pl35x_init_sram(dev, &s->itf[itfn]);
     }
-#ifdef HPSC_ECC
     s->itf[0].parent = s;
     s->itf[1].parent = s;
-#endif
     return 0;
 }
 static void pl35x_initfn(Object *obj)
@@ -621,6 +535,7 @@ static void pl35x_class_init(ObjectClass *klass, void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
     SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
 
+    dc->reset = pl35x_reset;
     k->init = pl35x_init;
     dc->props = pl35x_properties;
     dc->vmsd = &vmstate_pl35x;
