@@ -468,9 +468,9 @@ static void nand_command(NANDFlashState *s)
         break;
 
     case NAND_CMD_BLOCKERASE2:
-        s->addr &= (1ull << s->addrlen * 8) - 1;
+/*        s->addr &= (1ull << s->addrlen * 8) - 1;
         s->addr <<= nand_flash_ids[s->chip_id].options & NAND_SAMSUNG_LP ?
-                                                                    16 : 8;
+                                                                    16 : 8; */
 
         if (s->wp) {
             s->blk_erase(s);
@@ -911,7 +911,11 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
                 printf("write error in sector %" PRIu64 "\n", i);
             }
     } else {
+#ifdef HPSC
+        addr = PAGE_START(s->addr);
+#else
         addr = PAGE_START(addr);
+#endif
         page = addr >> 9;
         if (blk_pread(s->blk, page << BDRV_SECTOR_BITS, iobuf,
                       BDRV_SECTOR_SIZE) < 0) {
