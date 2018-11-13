@@ -36,9 +36,10 @@
 
 #include "sysemu/blockdev.h"
 
+#include "hw/block/offchip_sram.h"
+
 #define ECC_BYTES_PER_SUBPAGE 3
 #define ECC_CODEWORD_SIZE 512
-
 
 #ifdef PL35X_ERR_DEBUG
 #define DB_PRINT(...) do { \
@@ -53,7 +54,6 @@
 
 #define PL35X(obj) \
      OBJECT_CHECK(PL35xState, (obj), TYPE_PL35X)
-
 
 typedef struct PL35xItf {
     MemoryRegion mm;
@@ -92,7 +92,9 @@ typedef struct PL35xState {
 static void pl35x_reset(DeviceState *dev)
 {
     PL35xState *s = PL35X(dev);
-    if (!s->itf[1].mm.container)
+    if (!s->itf[0].mm.container) /* SRAM */
+        memory_region_add_subregion(s->mmio.container, 0x680000000, &s->itf[0].mm);
+    if (!s->itf[1].mm.container) /* NAND */
         memory_region_add_subregion(s->mmio.container, 0x600000000, &s->itf[1].mm);
     s->itf[1].ecc_r_data_size = 0;
     s->itf[1].ecc_w_data_size = 0;
@@ -445,23 +447,51 @@ static const MemoryRegionOps nand_ops = {
     }
 };
 
+static uint64_t oc_sram_read(void *opaque, hwaddr addr,
+                           unsigned int size)
+{
+    PL35xItf *s = opaque;
+    return offchip_sram_read(s->dev, addr, size);
+}
+
+static void oc_sram_write(void *opaque, hwaddr addr, uint64_t value64,
+                           unsigned int size)
+{
+    PL35xItf *s = opaque;
+    offchip_sram_write(s->dev, addr, value64, size);
+}
+
+static const MemoryRegionOps offchip_sram_ops = {
+    .read = oc_sram_read,
+    .write = oc_sram_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 4
+    }
+};
+
 static void pl35x_init_sram(SysBusDevice *dev, PL35xItf *itf)
 {
     /* d Just needs to be a valid sysbus device with at least one memory
      * region
      */
-    SysBusDevice *sbd = SYS_BUS_DEVICE(itf->dev);
-
-    memory_region_init(&itf->mm, OBJECT(dev), "pl35x.sram", 1 << 24);
-    if (sbd) {
-        memory_region_add_subregion(&itf->mm, 0,
-                                    sysbus_mmio_get_region(sbd, 0));
+    /* assume 2nd pflash drive */
+    DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
+    if (dinfo) {
+        itf->dev = offchip_sram_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL, 1 << 29);
+        assert(object_dynamic_cast(OBJECT(itf->dev), "offchip-sram"));
+    } else {
+        itf->dev = NULL; 
     }
+    memory_region_init_io(&itf->mm, OBJECT(dev), &offchip_sram_ops, itf, "pl35x.offchip_sram",
+                          1 << 29 ); // 256 MB SRAM + extra bytes
     sysbus_init_mmio(dev, &itf->mm);
 }
 
 static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
 {
+    /* assume 1st pflash drive */
     DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
     if (dinfo) {
         itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
@@ -473,26 +503,29 @@ static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
 
     // Still memory init is needed not to generate "Unassigned memory access"
     memory_region_init_io(&itf->mm, OBJECT(dev), &nand_ops, itf, "pl35x.nand",
-                          1 << 28); // 256 GB NAND
+                          1 << 29); // 256 MB NAND + extra bytes for OOBs
     sysbus_init_mmio(dev, &itf->mm);
 }
 
 static int pl35x_init(SysBusDevice *dev)
 {
     PL35xState *s = PL35X(dev);
-    int itfn = 0;
 
     memory_region_init_io(&s->mmio, OBJECT(dev), &pl35x_ops, s, "pl35x_io",
                           0x1000);
     sysbus_init_mmio(dev, &s->mmio);
-    if (s->x != 1) { /* everything cept PL351 has at least one SRAM */
-        pl35x_init_sram(dev, &s->itf[itfn]);
-        itfn++;
+    if (s->x == 1) { /* PL351 have NAND */
+        pl35x_init_nand(dev, &s->itf[0]);
     }
-    if (s->x & 0x1) { /* PL351 and PL353 have NAND */
-        pl35x_init_nand(dev, &s->itf[itfn]);
+    if (s->x == 0x2) { 
+        pl35x_init_sram(dev, &s->itf[0]);
+    }
+    if (s->x & 0x3) { /* PL353 have SRAM and NAND */
+        pl35x_init_nand(dev, &s->itf[1]);
+        pl35x_init_sram(dev, &s->itf[0]);
     } else if (s->x == 4) { /* PL354 has a second SRAM */
-        pl35x_init_sram(dev, &s->itf[itfn]);
+        pl35x_init_sram(dev, &s->itf[0]);
+        pl35x_init_sram(dev, &s->itf[1]);
     }
     s->itf[0].parent = s;
     s->itf[1].parent = s;
