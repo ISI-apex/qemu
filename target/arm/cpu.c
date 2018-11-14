@@ -728,8 +728,15 @@ static void arm_cpu_initfn(Object *obj)
                                                 arm_gt_htimer_cb, cpu);
     cpu->gt_timer[GTIMER_SEC] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,
                                                 arm_gt_stimer_cb, cpu);
-    qdev_init_gpio_out(DEVICE(cpu), cpu->gt_timer_outputs,
-                       ARRAY_SIZE(cpu->gt_timer_outputs));
+
+    qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_PHYS],
+                                    "timer_phys", 1);
+    qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_VIRT],
+                                    "timer_virt", 1);
+    qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_HYP],
+                                    "timer_hyp", 1);
+    qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_SEC],
+                                    "timer_sec", 1);
 
     qdev_init_gpio_out_named(DEVICE(cpu), &cpu->wfi, "wfi", 1);
 
@@ -2264,44 +2271,6 @@ static void arm_cpu_register_types(void)
 }
 
 type_init(arm_cpu_register_types)
-
-#ifndef CONFIG_USER_ONLY
-
-static int armv8_timer_fdt_init(char *node_path, FDTMachineInfo *fdti,
-                                void *priv)
-{
-    CPUState *cpu;
-    bool map_mode = false;
-    qemu_irq *sec_irqs = fdt_get_irq(fdti, node_path, 0, &map_mode);
-    qemu_irq *ns_irqs = fdt_get_irq(fdti, node_path, 1, &map_mode);
-    qemu_irq *v_irqs = fdt_get_irq(fdti, node_path, 2, &map_mode);
-    qemu_irq *h_irqs = fdt_get_irq(fdti, node_path, 3, &map_mode);
-
-    assert(!map_mode); /* not supported for PPI */
-
-    for (cpu = first_cpu; cpu; cpu = CPU_NEXT(cpu)) {
-        ARMCPU *acpu = ARM_CPU(cpu);
-
-        if (!arm_feature(&acpu->env, ARM_FEATURE_GENERIC_TIMER)) {
-            continue;
-        }
-        assert(*sec_irqs);
-        assert(*ns_irqs);
-        assert(*v_irqs);
-        assert(*h_irqs);
-        qdev_connect_gpio_out(DEVICE(acpu), 0, *ns_irqs++);
-        qdev_connect_gpio_out(DEVICE(acpu), 1, *v_irqs++);
-        qdev_connect_gpio_out(DEVICE(acpu), 2, *h_irqs++);
-        qdev_connect_gpio_out(DEVICE(acpu), 3, *sec_irqs++);
-    }
-
-    return 0;
-}
-
-fdt_register_compatibility_n(armv8_timer_fdt_init,
-                             "compatible:arm,armv8-timer", 13);
-
-#endif
 
 static const TypeInfo fdt_qom_aliases [] = {
     {   .name = "arm.cortex-a9",            .parent = "cortex-a9-arm-cpu"  },
