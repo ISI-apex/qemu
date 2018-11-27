@@ -1,4 +1,3 @@
-
 /*
   OFFCHIP SRAM emulation.
 
@@ -7,11 +6,16 @@
 #ifndef OFFCHIP_SRAM
 
 #include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "qemu-common.h"
 #include "hw/hw.h"
 #include "hw/block/flash.h"
 #include "sysemu/block-backend.h"
+#include "sysemu/blockdev.h"
+#include "exec/memory.h"
+#include "exec/address-spaces.h"
+#include "hw/sysbus.h"
 #include "hw/qdev.h"
-#include "qapi/error.h"
 #include "qemu/error-report.h"
 
 #include "hw/block/offchip_sram.h"
@@ -29,11 +33,14 @@
 
 typedef struct OFFCHIP_SRAMState OFFCHIP_SRAMState;
 struct OFFCHIP_SRAMState {
-    DeviceState parent_obj;
-    MemoryRegion mm;
-    uint32_t size;
-    uint8_t *ioaddr;
-    uint64_t addr;
+//    DeviceState parent_obj;
+    SysBusDevice parent_obj;
+    uint32_t pflash_index;	/* index of pflash device */
+    uint32_t region_size;	/* size of SRAM */
+    uint32_t start_addr_high;	/* start address high */
+    uint32_t start_addr_low;	/* start address low */
+    uint64_t addr;	/* address for debugging */
+    MemoryRegion iomem;
     BlockBackend *blk;
 };
 
@@ -49,7 +56,7 @@ static void offchip_sram_reset(DeviceState *dev)
 }
 
 static const VMStateDescription vmstate_offchip_sram = {
-    .name = "offchip_sram",
+    .name = "offchip-sram-vm",
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
@@ -58,52 +65,6 @@ static const VMStateDescription vmstate_offchip_sram = {
         VMSTATE_END_OF_LIST()
     }
 };
-
-static void offchip_sram_realize(DeviceState *dev, Error **errp)
-{
-    OFFCHIP_SRAMState *s = OFFCHIP_SRAM(dev);
-    int ret;
-
-    if (s->blk) {
-        if (blk_is_read_only(s->blk)) {
-            error_setg(errp, "Can't use a read-only drive");
-            return;
-        }
-        ret = blk_set_perm(s->blk, BLK_PERM_CONSISTENT_READ | BLK_PERM_WRITE,
-                           BLK_PERM_ALL, errp);
-        if (ret < 0) {
-            return;
-        }
-    } 
-}
-
-static Property offchip_sram_properties[] = {
-    DEFINE_PROP_UINT32("size", OFFCHIP_SRAMState, size, 0),
-    DEFINE_PROP_DRIVE("drive", OFFCHIP_SRAMState, blk),
-    DEFINE_PROP_END_OF_LIST(),
-};
-
-static void offchip_sram_class_init(ObjectClass *klass, void *data)
-{
-    DeviceClass *dc = DEVICE_CLASS(klass);
-
-    dc->realize = offchip_sram_realize;
-    dc->reset = offchip_sram_reset;
-    dc->vmsd = &vmstate_offchip_sram;
-    dc->props = offchip_sram_properties;
-}
-
-static const TypeInfo offchip_sram_info = {
-    .name          = TYPE_OFFCHIP_SRAM,
-    .parent        = TYPE_DEVICE,
-    .instance_size = sizeof(OFFCHIP_SRAMState),
-    .class_init    = offchip_sram_class_init,
-};
-
-static void offchip_sram_register_types(void)
-{
-    type_register_static(&offchip_sram_info);
-}
 
 void offchip_sram_write (void *opaque, hwaddr addr, uint64_t value64,
                        unsigned int size)
@@ -124,7 +85,8 @@ uint64_t offchip_sram_read (void *opaque, hwaddr addr,
     return value64;
 }
 
-static const MemoryRegionOps offchip_sram_ops = {
+
+const MemoryRegionOps offchip_sram_ops = {
     .read = offchip_sram_read,
     .write = offchip_sram_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
@@ -134,34 +96,69 @@ static const MemoryRegionOps offchip_sram_ops = {
     }
 };
 
-DeviceState *offchip_sram_init(BlockBackend *blk, uint32_t size)
+static int offchip_sram_initfn(SysBusDevice *sbd)
 {
-    DeviceState *dev;
+    DeviceState *dev = DEVICE(sbd);
+    OFFCHIP_SRAMState*s = OFFCHIP_SRAM(dev);
+    Error *local_err = NULL;
+    DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, s->pflash_index);
 
-    if (size == 0) {
-        hw_error("%s: Unsupported OFFCHIP_SRAM size.\n", __FUNCTION__);
-    }
-    dev = DEVICE(object_new(TYPE_OFFCHIP_SRAM));
-    qdev_prop_set_uint8(dev, "size", size);
-    if (blk) {
-        qdev_prop_set_drive(dev, "drive", blk, &error_fatal);
-    }
+    memory_region_init_io(&s->iomem, OBJECT(s), NULL, s, "offchip-sram-mem",
+                          s->region_size);
 
-    qdev_init_nofail(dev);
-/*
-    memory_region_init_io(&sdev->mm, OBJECT(sdev), &offchip_sram_ops, sdev, "pl35x.offchip_sram",
-                          (size == 0 ? 1 << 28 : size)); // 256 GB NAND
-*/
-    return dev;
+    if (dinfo) 
+        s->blk = blk_by_legacy_dinfo(dinfo); 
+    else 
+        s->blk = NULL;
+    if (s->blk) {
+        if (blk_is_read_only(s->blk)) {
+            error_report("Can't use a read-only drive");
+            return -1;
+        }
+        qdev_prop_set_drive(dev, "drive", s->blk, &error_fatal);
+        blk_set_perm(s->blk, BLK_PERM_CONSISTENT_READ | BLK_PERM_WRITE,
+                           BLK_PERM_ALL, &local_err);
+        if (local_err) {
+            error_report_err(local_err);
+            return -1;
+        }
+    }
+    sysbus_init_mmio(sbd, &s->iomem);
+
+    return 0;
+}
+static Property offchip_sram_properties[] = {
+    DEFINE_PROP_DRIVE("drive", OFFCHIP_SRAMState, blk),
+    DEFINE_PROP_UINT32("pflash_index", OFFCHIP_SRAMState, pflash_index, 0),
+    DEFINE_PROP_UINT32("region_size", OFFCHIP_SRAMState, region_size, 0),
+    DEFINE_PROP_UINT32("start_addr_high", OFFCHIP_SRAMState, start_addr_high, 0),
+    DEFINE_PROP_UINT32("start_addr_low", OFFCHIP_SRAMState, start_addr_low, 0),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
+static void offchip_sram_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
+
+    k->init = offchip_sram_initfn;
+    dc->reset = offchip_sram_reset;
+    dc->vmsd = &vmstate_offchip_sram;
+    dc->props = offchip_sram_properties;
+}
+
+static const TypeInfo offchip_sram_info = {
+    .name          = TYPE_OFFCHIP_SRAM,
+    .parent        = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(OFFCHIP_SRAMState),
+    .class_init    = offchip_sram_class_init,
+};
+
+static void offchip_sram_register_types(void)
+{
+    type_register_static(&offchip_sram_info);
 }
 
 type_init(offchip_sram_register_types)
 
-#else
-
-
-# undef PAGE_SIZE
-# undef PAGE_SHIFT
-# undef PAGE_SECTORS
-# undef ADDR_SHIFT
 #endif	/* OFFCHIP_SRAM_IO */

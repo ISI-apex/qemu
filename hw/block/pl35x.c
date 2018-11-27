@@ -89,18 +89,42 @@ typedef struct PL35xState {
     uint8_t x; /* the "x" in pl35x */
 } PL35xState;
 
-static void pl35x_reset(DeviceState *dev)
+static int pl35x_device_list_sram(Object * obj, void *opaque)
 {
-    PL35xState *s = PL35X(dev);
-    if (!s->itf[0].mm.container) /* SRAM */
-        memory_region_add_subregion(s->mmio.container, 0x680000000, &s->itf[0].mm);
-    if (!s->itf[1].mm.container) /* NAND */
-        memory_region_add_subregion(s->mmio.container, 0x600000000, &s->itf[1].mm);
-    s->itf[1].ecc_r_data_size = 0;
-    s->itf[1].ecc_w_data_size = 0;
-    s->itf[1].r_new_ecc = false;
-    s->itf[1].w_new_ecc = false;
+    GSList **list = opaque;
 
+    if (object_dynamic_cast(obj, "offchip-sram")) {
+        *list = g_slist_append(*list, DEVICE(obj));
+    }
+    object_child_foreach(obj, pl35x_device_list_sram, opaque);
+    return 0;
+}
+
+static GSList *pl35x_get_device_list_sram(Object * obj)
+{
+    GSList *list = NULL;
+
+    object_child_foreach(obj, pl35x_device_list_sram, &list);
+    return list;
+}
+
+static int pl35x_device_list_nand(Object * obj, void *opaque)
+{
+    GSList **list = opaque;
+
+    if (object_dynamic_cast(obj, "nand")) {
+        *list = g_slist_append(*list, DEVICE(obj));
+    }
+    object_child_foreach(obj, pl35x_device_list_nand, opaque);
+    return 0;
+}
+
+static GSList *pl35x_get_device_list_nand(Object * obj)
+{
+    GSList *list = NULL;
+
+    object_child_foreach(obj, pl35x_device_list_nand, &list);
+    return list;
 }
 
 static void pl35x_ecc_init(PL35xItf *s)
@@ -437,7 +461,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     }
 }
 
-static const MemoryRegionOps nand_ops = {
+const MemoryRegionOps nand_ops = {
     .read = nand_read,
     .write = nand_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
@@ -447,52 +471,65 @@ static const MemoryRegionOps nand_ops = {
     }
 };
 
-static uint64_t oc_sram_read(void *opaque, hwaddr addr,
-                           unsigned int size)
+static void pl35x_reset(DeviceState *dev)
 {
-    PL35xItf *s = opaque;
-    return offchip_sram_read(s->dev, addr, size);
-}
-
-static void oc_sram_write(void *opaque, hwaddr addr, uint64_t value64,
-                           unsigned int size)
-{
-    PL35xItf *s = opaque;
-    offchip_sram_write(s->dev, addr, value64, size);
-}
-
-static const MemoryRegionOps offchip_sram_ops = {
-    .read = oc_sram_read,
-    .write = oc_sram_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-    .valid = {
-        .min_access_size = 1,
-        .max_access_size = 4
+    PL35xState *s = PL35X(dev);
+    /* if child for sram exists */
+    GSList * list = pl35x_get_device_list_sram(OBJECT(dev));
+    if (list) { /* sram exists */
+        if (s->itf[0].dev == NULL) {
+            s->itf[0].dev = DEVICE(list->data);
+            uint32_t high_addr = object_property_get_int(OBJECT(list->data), "start_addr_high",
+                                          NULL);
+            uint32_t low_addr = object_property_get_int(OBJECT(list->data), "start_addr_low",
+                                          NULL);
+            uint32_t region_size = object_property_get_int(OBJECT(list->data), "region_size",
+                                          NULL);
+            memory_region_init_io(&s->itf[0].mm, OBJECT(list->data), &offchip_sram_ops, OBJECT(list->data), "pl35x.sram", region_size);
+            if (s->itf[0].mm.container == NULL) { /* SRAM */
+	        uint64_t address = (uint64_t) high_addr << 32 | low_addr;
+                memory_region_add_subregion(s->mmio.container, address, &s->itf[0].mm);
+            }
+        }
     }
-};
+    /* if child for nand exists */
+    list = pl35x_get_device_list_nand(OBJECT(dev));
+    if (list) { /* nand exists */
+        if (s->itf[1].dev == NULL) {
+            s->itf[1].dev = DEVICE(list->data);
+            uint32_t high_addr = object_property_get_int(OBJECT(list->data), "start_addr_high",
+                                          NULL);
+            uint32_t low_addr = object_property_get_int(OBJECT(list->data), "start_addr_low",
+                                          NULL);
+            uint32_t region_size = object_property_get_int(OBJECT(list->data), "region_size",
+                                          NULL);
+            memory_region_init_io(&s->itf[1].mm, OBJECT(dev), &nand_ops, &s->itf[1], "pl35x.nand", region_size);
+            sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[1].mm);
+            if (!s->itf[1].mm.container) { /* NAND */
+	        uint64_t address = (uint64_t) high_addr << 32 | low_addr;
+                memory_region_add_subregion(s->mmio.container, address, &s->itf[1].mm);
+            }
+        }
+        s->itf[1].ecc_r_data_size = 0;
+        s->itf[1].ecc_w_data_size = 0;
+        s->itf[1].r_new_ecc = false;
+        s->itf[1].w_new_ecc = false;
+    }
+}
 
 static void pl35x_init_sram(SysBusDevice *dev, PL35xItf *itf)
 {
-    /* d Just needs to be a valid sysbus device with at least one memory
-     * region
-     */
-    /* assume 2nd pflash drive */
-    DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
-    if (dinfo) {
-        itf->dev = offchip_sram_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL, 1 << 29);
-        assert(object_dynamic_cast(OBJECT(itf->dev), "offchip-sram"));
-    } else {
-        itf->dev = NULL; 
-    }
-    memory_region_init_io(&itf->mm, OBJECT(dev), &offchip_sram_ops, itf, "pl35x.offchip_sram",
-                          1 << 29 ); // 256 MB SRAM + extra bytes
-    sysbus_init_mmio(dev, &itf->mm);
+    /* all of the functionalities are moved to pl35x_reset() */
+    return;
 }
 
 static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
 {
+    /* all of the functionalities are moved to pl35x_reset() */
+    return;
     /* assume 1st pflash drive */
-    DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
+    // DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
+    DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, 0);
     if (dinfo) {
         itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
                                NAND_MFR_MICRON, 0xaa);	/* from drivers/mtd/nand/nand_ids.c, MiB */
