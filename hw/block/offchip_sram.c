@@ -71,6 +71,7 @@ void offchip_sram_write (void *opaque, hwaddr addr, uint64_t value64,
 {
     OFFCHIP_SRAMState *s = OFFCHIP_SRAM(opaque);
     assert (size < sizeof(uint64_t)); 
+    if (!s->blk) return ; 
     blk_pwrite(s->blk, addr, &value64, size, 0);
 }
 
@@ -80,7 +81,8 @@ uint64_t offchip_sram_read (void *opaque, hwaddr addr,
     uint64_t value64;
     OFFCHIP_SRAMState *s = OFFCHIP_SRAM(opaque);
     assert (size < sizeof(uint64_t)); 
-    
+
+    if (!s->blk) return 0; 
     blk_pread(s->blk, addr, &value64, size);
     return value64;
 }
