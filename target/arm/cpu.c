@@ -161,11 +161,14 @@ static void arm_cpu_reset(CPUState *s)
     env->vfp.xregs[ARM_VFP_MVFR1] = cpu->mvfr1;
     env->vfp.xregs[ARM_VFP_MVFR2] = cpu->mvfr2;
 
-    /* Reset value of SCTLR_V is controlled by input signal VINITHI.  */
-    env->cp15.sctlr_ns &= ~SCTLR_V;
-    env->cp15.sctlr_s &= ~SCTLR_V;
-    env->cp15.sctlr_ns |= env->vinithi ? SCTLR_V : 0;
-    env->cp15.sctlr_s |= env->vinithi ? SCTLR_V : 0;
+    if (arm_feature(env, ARM_FEATURE_V8) &&
+        !arm_feature(env, ARM_FEATURE_V8R)) { /* no SCTLR in v7, no V bit in V8R */
+        /* Reset value of SCTLR_V is controlled by input signal VINITHI.  */
+        env->cp15.sctlr_ns &= ~SCTLR_V;
+        env->cp15.sctlr_s &= ~SCTLR_V;
+        env->cp15.sctlr_ns |= env->vinithi ? SCTLR_V : 0;
+        env->cp15.sctlr_s |= env->vinithi ? SCTLR_V : 0;
+    }
 
     if (arm_feature(env, ARM_FEATURE_IWMMXT)) {
         env->iwmmxt.cregs[ARM_IWMMXT_wCID] = 0x69051000 | 'Q';
