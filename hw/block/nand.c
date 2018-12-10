@@ -679,8 +679,10 @@ static int nand_initfn(SysBusDevice *sbd)
                           s->region_size);
     if (dinfo) 
         s->blk = blk_by_legacy_dinfo(dinfo); 
-    else 
+    else {
         s->blk = NULL;
+        s->chip_id = 0;
+    }
     if (s->blk) {
         if (blk_is_read_only(s->blk)) {
             error_report("Can't use a read-only drive");
