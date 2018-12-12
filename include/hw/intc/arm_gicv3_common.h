@@ -222,6 +222,8 @@ struct GICv3State {
     uint32_t cpu_start_id; /* IDs of CPUs connected to the GIC */
 #endif
 
+    bool reset; /* latched value of resetn input signal */
+
     int dev_fd; /* kvm device fd if backed by kvm vgic support */
     Error *migration_blocker;
 
