@@ -212,6 +212,7 @@ DEP_REG32(RST_FPD_TOP, 0x100)
     DEP_FIELD(RST_FPD_TOP, SATA_RESET, 1, 1)
 DEP_REG32(RST_FPD_APU, 0x104)
 #ifdef HPSC
+    DEP_FIELD(RST_FPD_APU, GIC_RESET, 1, 18)
     DEP_FIELD(RST_FPD_APU, ACPU7_PWRON_RESET, 1, 17)
     DEP_FIELD(RST_FPD_APU, ACPU6_PWRON_RESET, 1, 16)
     DEP_FIELD(RST_FPD_APU, ACPU5_PWRON_RESET, 1, 15)
@@ -395,8 +396,8 @@ static DepRegisterAccessInfo crf_apb_regs_info[] = {
         .rsvd = 0xf06001,
     },{ .name = "RST_FPD_APU",  .decode.addr = A_RST_FPD_APU,
 #ifdef HPSC
-        .reset = 0x3fdff,
-        .rsvd = 0xc0200,
+        .reset = 0x7fdff,
+        .rsvd = 0x80200,
 #else
         .reset = 0x3d0f,
         .rsvd = 0xc2f0,
@@ -407,6 +408,7 @@ static DepRegisterAccessInfo crf_apb_regs_info[] = {
 #else
             { .name = "RST_A9", .bit_pos = 0, .num = 4 },
 #endif
+            { .name = "RST_GIC", .bit_pos = 18, .num = 1 },
             {},
         },
         .inhibit_reset = 1u << 31,
@@ -485,6 +487,7 @@ static const FDTGenericGPIOSet crf_gpios[] = {
 #else
             { .name = "RST_A9",   .fdt_index = 0,   .range = 4 },
 #endif
+            { .name = "RST_GIC",  .fdt_index = 8,   .range = 1 },
             { },
         }
     },
