@@ -196,11 +196,11 @@ void gicv3_init_irqs_and_mmio(GICv3State *s, qemu_irq_handler handler,
     }
     for (i = 0; i < s->num_cpu; i++) {
         sysbus_init_irq(sbd, &s->cpu[i].parent_virq);
-        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_virq, "irq", 1);
+        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_virq, "virq", 1);
     }
     for (i = 0; i < s->num_cpu; i++) {
         sysbus_init_irq(sbd, &s->cpu[i].parent_vfiq);
-        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_vfiq, "fiq", 1);
+        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_vfiq, "vfiq", 1);
     }
     for (i = 0; i < s->num_cpu; i++) {
         qdev_init_gpio_out_named(DEVICE(s),
