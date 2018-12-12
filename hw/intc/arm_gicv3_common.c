@@ -188,24 +188,25 @@ void gicv3_init_irqs_and_mmio(GICv3State *s, qemu_irq_handler handler,
 
     for (i = 0; i < s->num_cpu; i++) {
         sysbus_init_irq(sbd, &s->cpu[i].parent_irq);
-        sysbus_init_irq(sbd, &s->cpu[i].parent_fiq);
-        sysbus_init_irq(sbd, &s->cpu[i].parent_virq);
-        sysbus_init_irq(sbd, &s->cpu[i].parent_vfiq);
-        sysbus_init_irq(sbd, &s->cpu[i].maintenance_irq);
+        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_irq, "irq", 1);
     }
-
-    qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_irq,
-                             "irq", s->num_cpu);
-    qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_fiq,
-                             "fiq", s->num_cpu);
-    qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_virq,
-                             "virq", s->num_cpu);
-    qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_vfiq,
-                             "vfiq", s->num_cpu);
-    qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].maintenance_irq,
-                            "maint", s->num_cpu);
-
-    qdev_init_gpio_in_named(DEVICE(s), arm_gicv3_common_reset_gpio, "resetn", 1);
+    for (i = 0; i < s->num_cpu; i++) {
+        sysbus_init_irq(sbd, &s->cpu[i].parent_fiq);
+        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_fiq, "fiq", 1);
+    }
+    for (i = 0; i < s->num_cpu; i++) {
+        sysbus_init_irq(sbd, &s->cpu[i].parent_virq);
+        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_virq, "virq", 1);
+    }
+    for (i = 0; i < s->num_cpu; i++) {
+        sysbus_init_irq(sbd, &s->cpu[i].parent_vfiq);
+        qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_vfiq, "vfiq", 1);
+    }
+    for (i = 0; i < s->num_cpu; i++) {
+        sysbus_init_irq(sbd, &s->cpu[i].maintenance_irq);
+        qdev_init_gpio_out_named(DEVICE(s),
+                                 &s->cpu[i].maintenance_irq, "maint", 1);
+    }
 
     memory_region_init_io(&s->iomem_dist, OBJECT(s), ops, s,
                           "gicv3_dist", 0x10000);
