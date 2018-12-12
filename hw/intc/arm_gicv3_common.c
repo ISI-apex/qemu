@@ -203,6 +203,7 @@ void gicv3_init_irqs_and_mmio(GICv3State *s, qemu_irq_handler handler,
         qdev_init_gpio_out_named(DEVICE(s), &s->cpu[i].parent_vfiq, "vfiq", 1);
     }
     for (i = 0; i < s->num_cpu; i++) {
+        sysbus_init_irq(sbd, &s->cpu[i].maintenance_irq);
         qdev_init_gpio_out_named(DEVICE(s),
                                  &s->cpu[i].maintenance_irq, "maint", 1);
     }
