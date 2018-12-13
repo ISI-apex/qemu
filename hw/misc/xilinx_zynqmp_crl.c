@@ -537,6 +537,7 @@ DEP_REG32(RST_LPD_IOU2, 0x238)
     DEP_FIELD(RST_LPD_IOU2, UART0_RESET, 1, 1)
     DEP_FIELD(RST_LPD_IOU2, QSPI_RESET, 1, 0)
 DEP_REG32(RST_LPD_TOP, 0x23c)
+    DEP_FIELD(RST_LPD_TOP, GIC_RESET, 1, 24)
     DEP_FIELD(RST_LPD_TOP, FPD_RESET, 1, 23)
     DEP_FIELD(RST_LPD_TOP, LPD_SWDT_RESET, 1, 20)
     DEP_FIELD(RST_LPD_TOP, AFI_FM6_RESET, 1, 19)
@@ -912,10 +913,11 @@ static DepRegisterAccessInfo crl_apb_regs_info[] = {
         .reset = 0x7ffff,
         .rsvd = 0xfff00000L,
     },{ .name = "RST_LPD_TOP",  .decode.addr = A_RST_LPD_TOP,
-        .reset = 0x188fdf,
-        .rsvd = 0x643020,
+        .reset = 0x01188fdf,
+        .rsvd =  0xfe643020,
         .gpios = (DepRegisterGPIOMapping[]) {
-            { .name = "RST_R5", .bit_pos = 0,   .num = 2 },
+            { .name = "RST_R5",         .bit_pos =  0, .num = 2 },
+            { .name = "RST_GIC",        .bit_pos = 24, .num = 1 },
             {},
         },
         .inhibit_reset = 1u << 31,
@@ -1063,6 +1065,7 @@ static const FDTGenericGPIOSet crl_gpios[] = {
 #else
             { .name = "SRST_B",     .fdt_index = 2  },
 #endif
+            { .name = "RST_GIC",    .fdt_index = 4,     .range = 1 },
             { },
         }
     },
