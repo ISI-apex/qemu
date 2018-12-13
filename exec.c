@@ -3866,7 +3866,20 @@ void cpu_reset_gpio(void *opaque, int irq, int level)
      */
     cpu->reset_pin = level;
     if (old_reset_pin && !cpu->reset_pin) {
-        cpu_reset(cpu);
+        /* We cannot perform the reset from this thread in case when this
+         * thread is not the CPU thread (which happens if we got here via a
+         * ptimer callback, for example), because, if we tried to reset here
+         * (while the CPU thread is inside cpu_exec -- even if it's blocked on
+         * a mutex), then we will clear the cpu state, but when CPU thread
+         * continues in the cpu_exec, it will return from tcg_qemu_tb_exec, and
+         * find that the block execution was interrupted, so it will ovewrite
+         * the CPU state back to re-execute that block, which is normal
+         * behavior on interrupt.
+         *
+         * To avoid this situation, instead of reseting the CPU state directly
+         * here with cpu_reset, we enqueue an interrupt for the CPU thread,
+         * whose handling operation is to call cpu_reset. */
+        cpu_interrupt(cpu, CPU_INTERRUPT_RESET);
     }
 
     cpu_halt_update(cpu);
