@@ -220,6 +220,7 @@ struct GICv3State {
     bool irq_reset_nonsecure;
 #ifdef HPSC
     uint32_t cpu_start_id; /* IDs of CPUs connected to the GIC */
+    uint32_t gicd_typer; /* Interrupt Controller Type Register value */
 #endif
 
     bool reset; /* latched value of resetn input signal */
