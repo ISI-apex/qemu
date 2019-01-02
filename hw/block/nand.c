@@ -101,11 +101,11 @@ struct NANDFlashState {
     uint64_t addr;
     int addrlen;
     int status;
-    int offset;
+    uint64_t offset;
 
     void (*blk_write)(NANDFlashState *s);
     void (*blk_erase)(NANDFlashState *s);
-    void (*blk_load)(NANDFlashState *s, uint64_t addr, int offset);
+    void (*blk_load)(NANDFlashState *s, uint64_t addr, uint64_t offset);
 
     uint32_t ioaddr_vmstate;
 };
@@ -372,6 +372,12 @@ static const struct {
     [0xd5] = { 2048,	8,	0, 0, LP_OPTIONS },
     [0xb5] = { 2048,	16,	0, 0, LP_OPTIONS16 },
     [0xc5] = { 2048,	16,	0, 0, LP_OPTIONS16 },
+
+    /* 32 Gigabit : from Linux */
+    [0xa7] = { 2048,	8,	0, 0, LP_OPTIONS },
+    [0xd7] = { 2048,	8,	0, 0, LP_OPTIONS },
+    [0xb7] = { 2048,	16,	0, 0, LP_OPTIONS16 },
+    [0xc7] = { 2048,	16,	0, 0, LP_OPTIONS16 },
 };
 
 static void nand_reset(DeviceState *dev)
@@ -397,7 +403,7 @@ static inline void nand_pushio_byte(NANDFlashState *s, uint8_t value)
 static void nand_command(NANDFlashState *s)
 {
     int i, j;
-    unsigned int offset;
+    uint64_t offset;
     switch (s->cmd) {
     case NAND_CMD_READ0:
         s->iolen = 0;
@@ -536,7 +542,7 @@ static const VMStateDescription vmstate_nand = {
         VMSTATE_UINT64(addr, NANDFlashState),
         VMSTATE_INT32(addrlen, NANDFlashState),
         VMSTATE_INT32(status, NANDFlashState),
-        VMSTATE_INT32(offset, NANDFlashState),
+        VMSTATE_UINT64(offset, NANDFlashState),
         /* XXX: do we want to save s->storage too? */
         VMSTATE_END_OF_LIST()
     }
@@ -886,7 +892,7 @@ void nand_setio(DeviceState *dev, uint32_t value)
 
 uint32_t nand_getio(DeviceState *dev)
 {
-    int offset;
+    uint64_t offset;
     uint32_t x = 0;
     NANDFlashState *s = NAND(dev);
 
@@ -1071,7 +1077,7 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
 }
 
 static void glue(nand_blk_load_, PAGE_SIZE)(NANDFlashState *s,
-                uint64_t addr, int offset)
+                uint64_t addr, uint64_t offset)
 {
     if (PAGE(addr) >= s->pages) {
         return;
