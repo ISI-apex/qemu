@@ -537,6 +537,7 @@ DEP_REG32(RST_LPD_IOU2, 0x238)
     DEP_FIELD(RST_LPD_IOU2, UART0_RESET, 1, 1)
     DEP_FIELD(RST_LPD_IOU2, QSPI_RESET, 1, 0)
 DEP_REG32(RST_LPD_TOP, 0x23c)
+    DEP_FIELD(RST_LPD_TOP, A53GIC_RESET, 1, 25)
     DEP_FIELD(RST_LPD_TOP, GIC_RESET, 1, 24)
     DEP_FIELD(RST_LPD_TOP, FPD_RESET, 1, 23)
     DEP_FIELD(RST_LPD_TOP, LPD_SWDT_RESET, 1, 20)
@@ -551,9 +552,10 @@ DEP_REG32(RST_LPD_TOP, 0x23c)
     DEP_FIELD(RST_LPD_TOP, USB0_HIBERRESET, 1, 8)
     DEP_FIELD(RST_LPD_TOP, USB1_CORERESET, 1, 7)
     DEP_FIELD(RST_LPD_TOP, USB0_CORERESET, 1, 6)
-    DEP_FIELD(RST_LPD_TOP, RPU_PGE_RESET, 1, 4)
-    DEP_FIELD(RST_LPD_TOP, RPU_OCM_RESET, 1, 3)
-    DEP_FIELD(RST_LPD_TOP, RPU_AMBA_RESET, 1, 2)
+    DEP_FIELD(RST_LPD_TOP, RPU_PGE_RESET, 1, 5)
+    DEP_FIELD(RST_LPD_TOP, RPU_OCM_RESET, 1, 4)
+    DEP_FIELD(RST_LPD_TOP, RPU_AMBA_RESET, 1, 3)
+    DEP_FIELD(RST_LPD_TOP, RPU_A53_RESET, 1, 2)
     DEP_FIELD(RST_LPD_TOP, RPU_R51_RESET, 1, 1)
     DEP_FIELD(RST_LPD_TOP, RPU_R50_RESET, 1, 0)
 DEP_REG32(RST_LPD_DBG, 0x240)
@@ -913,11 +915,13 @@ static DepRegisterAccessInfo crl_apb_regs_info[] = {
         .reset = 0x7ffff,
         .rsvd = 0xfff00000L,
     },{ .name = "RST_LPD_TOP",  .decode.addr = A_RST_LPD_TOP,
-        .reset = 0x01188fdf,
-        .rsvd =  0xfe643020,
+        .reset = 0x01188fff,
+        .rsvd =  0xfe643000,
         .gpios = (DepRegisterGPIOMapping[]) {
             { .name = "RST_R5",         .bit_pos =  0, .num = 2 },
+            { .name = "RST_A53",        .bit_pos =  2, .num = 1 },
             { .name = "RST_GIC",        .bit_pos = 24, .num = 1 },
+            { .name = "RST_A53GIC",     .bit_pos = 25, .num = 1 },
             {},
         },
         .inhibit_reset = 1u << 31,
@@ -1066,6 +1070,7 @@ static const FDTGenericGPIOSet crl_gpios[] = {
             { .name = "SRST_B",     .fdt_index = 2  },
 #endif
             { .name = "RST_GIC",    .fdt_index = 4,     .range = 1 },
+            { .name = "RST_A53GIC", .fdt_index = 5,     .range = 1 },
             { },
         }
     },

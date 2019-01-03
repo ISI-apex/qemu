@@ -351,10 +351,24 @@ REG32(RPU_1_AXI_OVER, 0x228)
     FIELD(RPU_1_AXI_OVER, ARCACHE, 2, 4)
     FIELD(RPU_1_AXI_OVER, AWCACHE_EN, 1, 1)
     FIELD(RPU_1_AXI_OVER, ARCACHE_EN, 0, 1)
+REG32(A53_CFG, 0x300)
+    FIELD(A53_CFG, CFGNMFI0, 3, 1)
+    FIELD(A53_CFG, VINITHI, 2, 1)
+    FIELD(A53_CFG, COHERENT, 1, 1)
+    FIELD(A53_CFG, NCPUHALT, 0, 1)
+REG32(A53_STATUS, 0x304)
+    FIELD(A53_STATUS, NVALRESET, 5, 1)
+    FIELD(A53_STATUS, NVALIRQ, 4, 1)
+    FIELD(A53_STATUS, NVALFIQ, 3, 1)
+    FIELD(A53_STATUS, NWFIPIPESTOPPED, 2, 1)
+    FIELD(A53_STATUS, NWFEPIPESTOPPED, 1, 1)
+    FIELD(A53_STATUS, NCLKSTOPPED, 0, 1)
+REG32(A53_PWRDWN, 0x308)
+    FIELD(A53_PWRDWN, EN, 0, 1)
 
 #define RPU_CTRL_R_MAX (R_RPU_1_AXI_OVER + 1)
 
-#define NUM_CONT_OUT_IRQS    7
+#define NUM_CONT_OUT_IRQS    10
 
 enum cont_out_array_nums {
     R5_0_HALT = 0,
@@ -363,14 +377,18 @@ enum cont_out_array_nums {
     R5_0_PWRDWN_REQ,
     R5_1_PWRDWN_REQ,
     R5_0_VINITHI,
-    R5_1_VINITHI = 6
+    R5_1_VINITHI,
+    A53_HALT,
+    A53_PWRDWN_REQ,
+    A53_VINITHI = 9,
 };
 
 static const char *cont_out_array_names[NUM_CONT_OUT_IRQS] = {
                                         "R5_0_HALT", "R5_1_HALT",
                                         "R5_SLSPLIT",
                                         "R5_0_PWRDWN_REQ", "R5_1_PWRDWN_REQ",
-                                        "R5_0_VINITHI", "R5_1_VINITHI"
+                                        "R5_0_VINITHI", "R5_1_VINITHI", "A53_HALT",
+					"A53_PWRDWN_REQ", "A53_VINITHI"
                                                              };
 
 /* Returns the interrupt bank from the register offset. */
@@ -404,13 +422,13 @@ typedef struct XlnxZynqMPRPUCtrl {
     XlnxSCUGICState *gic;
 #endif
     /* WFIs towards PMU. */
-    qemu_irq wfi_out[2];
+    qemu_irq wfi_out[3];
     /* Comparators fault. */
-    qemu_irq comp_fault[2];
+    qemu_irq comp_fault[3];
     /* General outbound GPIO lines */
     qemu_irq cont_out_gpios[NUM_CONT_OUT_IRQS];
 
-    bool cpu_in_wfi[2];
+    bool cpu_in_wfi[3];
 
     uint32_t regs[RPU_CTRL_R_MAX];
     RegisterInfo regs_info[RPU_CTRL_R_MAX];
@@ -540,12 +558,13 @@ static void update_wfi_out(void *opaque)
 {
     XlnxZynqMPRPUCtrl *s = XLNX_RPU_CTRL(opaque);
     unsigned int i, wfi_pending;
-    unsigned int pwrdnreq[2];
+    unsigned int pwrdnreq[3];
 
     pwrdnreq[0] = ARRAY_FIELD_EX32(s->regs, RPU_0_PWRDWN, EN);
     pwrdnreq[1] = ARRAY_FIELD_EX32(s->regs, RPU_1_PWRDWN, EN);
+    pwrdnreq[2] = ARRAY_FIELD_EX32(s->regs, A53_PWRDWN, EN);
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 3; i++) {
         wfi_pending = pwrdnreq[i] && s->cpu_in_wfi[i];
         qemu_set_irq(s->wfi_out[i], wfi_pending);
     }
@@ -561,6 +580,9 @@ static void zynqmp_rpu_pwrctl_post_write(RegisterInfo *reg, uint64_t val)
     } else if (reg->access->addr == A_RPU_1_PWRDWN) {
         qemu_set_irq(s->cont_out_gpios[R5_1_PWRDWN_REQ],
                      !!(val & R_RPU_1_PWRDWN_EN_MASK));
+    } else if (reg->access->addr == A_A53_PWRDWN) {
+        qemu_set_irq(s->cont_out_gpios[A53_PWRDWN_REQ],
+                     !!(val & R_A53_PWRDWN_EN_MASK));
     } else {
         g_assert_not_reached();
     }
@@ -586,6 +608,13 @@ static void zynqmp_rpu_cfg_post_write(RegisterInfo *reg, uint64_t val)
 
         qemu_set_irq(s->cont_out_gpios[R5_1_VINITHI],
                      !!(val & R_RPU_1_CFG_VINITHI_MASK));
+    } else if (reg->access->addr == A_A53_CFG) {
+        /* Inverse polarity*/
+        qemu_set_irq(s->cont_out_gpios[A53_HALT],
+                     !(val & R_A53_CFG_NCPUHALT_MASK));
+
+        qemu_set_irq(s->cont_out_gpios[A53_VINITHI],
+                     !!(val & R_A53_CFG_VINITHI_MASK));
     } else {
         g_assert_not_reached();
     }
@@ -709,6 +738,17 @@ static const RegisterAccessInfo rpu_regs_info[] = {
         .rsvd = 0xffffff00,
     },{ .name = "RPU_1_AXI_OVER",  .addr = A_RPU_1_AXI_OVER,
         .rsvd = 0xfffffc00,
+    },{ .name = "A53_CFG",  .addr = A_A53_CFG,
+        .reset = 0x5,
+        .rsvd = 0xfffffff0,
+        .post_write = zynqmp_rpu_cfg_post_write,
+    },{ .name = "A53_STATUS",  .addr = A_A53_STATUS,
+        .reset = 0x3f,
+        .rsvd = 0xffffffc0,
+        .ro = 0x3f,
+    },{ .name = "A53_PWRDWN",  .addr = A_A53_PWRDWN,
+        .rsvd = 0xfffffffe,
+        .post_write = zynqmp_rpu_pwrctl_post_write,
     }
 };
 
@@ -724,7 +764,7 @@ static void rpu_reset(DeviceState *dev)
     rpu_1_update_irq(s);
     rpu_0_update_irq(s);
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 3; i++) {
         s->cpu_in_wfi[i] = false;
     }
     update_wfi_out(s);
@@ -778,6 +818,14 @@ static void zynqmp_rpu_1_handle_wfi(void *opaque, int irq, int level)
     XlnxZynqMPRPUCtrl *s = XLNX_RPU_CTRL(opaque);
 
     s->cpu_in_wfi[1] = level;
+    update_wfi_out(s);
+}
+
+static void zynqmp_a53_handle_wfi(void *opaque, int irq, int level)
+{
+    XlnxZynqMPRPUCtrl *s = XLNX_RPU_CTRL(opaque);
+
+    s->cpu_in_wfi[2] = level;
     update_wfi_out(s);
 }
 
@@ -944,6 +992,7 @@ static void rpu_init(Object *obj)
     /* wfi_in is used as input from CPUs as wfi request. */
     qdev_init_gpio_in_named(DEVICE(obj), zynqmp_rpu_0_handle_wfi, "wfi_in_0", 1);
     qdev_init_gpio_in_named(DEVICE(obj), zynqmp_rpu_1_handle_wfi, "wfi_in_1", 1);
+    qdev_init_gpio_in_named(DEVICE(obj), zynqmp_a53_handle_wfi, "wfi_in_1", 1);
 }
 
 static const VMStateDescription vmstate_rpu = {
@@ -968,8 +1017,10 @@ static const FDTGenericGPIOSet rpu_controller_gpios [] = {
             { .name = "R5_1_PWRDWN_REQ",    .fdt_index = R5_1_PWRDWN_REQ },
             { .name = "R5_0_VINITHI",       .fdt_index = R5_0_VINITHI },
             { .name = "R5_1_VINITHI",       .fdt_index = R5_1_VINITHI },
-            { .name = "wfi_in_0",           .fdt_index = 7 },
-            { .name = "wfi_in_1",           .fdt_index = 8 },
+            { .name = "A53_HALT",           .fdt_index = A53_HALT },
+            { .name = "wfi_in_0",           .fdt_index = 8 },
+            { .name = "wfi_in_1",           .fdt_index = 9 },
+            { .name = "wfi_in_2",           .fdt_index = 10 },
             { },
         },
     },

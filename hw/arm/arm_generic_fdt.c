@@ -602,9 +602,9 @@ static void arm_generic_fdt_machine_init(MachineClass *mc)
     mc->init = arm_generic_fdt_init;
     mc->ignore_memory_transaction_failures = true;
 #ifdef HPSC
-    /* 4 A53s and 2 R5s and 1 M4 */
-    mc->max_cpus = 11;
-    mc->default_cpus = 11;
+    /* HPPS 8 A53s and RTPS 2 R5s and 1 A53 and 1 M4 */
+    mc->max_cpus = 12;
+    mc->default_cpus = 12;
 #else
     /* 4 A53s and 2 R5s */
     mc->max_cpus = 6;
