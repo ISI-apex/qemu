@@ -351,22 +351,22 @@ REG32(RPU_1_AXI_OVER, 0x228)
     FIELD(RPU_1_AXI_OVER, ARCACHE, 2, 4)
     FIELD(RPU_1_AXI_OVER, AWCACHE_EN, 1, 1)
     FIELD(RPU_1_AXI_OVER, ARCACHE_EN, 0, 1)
-REG32(A53_CFG, 0x300)
+REG32(A53_CFG, 0x270)
     FIELD(A53_CFG, CFGNMFI0, 3, 1)
     FIELD(A53_CFG, VINITHI, 2, 1)
     FIELD(A53_CFG, COHERENT, 1, 1)
     FIELD(A53_CFG, NCPUHALT, 0, 1)
-REG32(A53_STATUS, 0x304)
+REG32(A53_STATUS, 0x274)
     FIELD(A53_STATUS, NVALRESET, 5, 1)
     FIELD(A53_STATUS, NVALIRQ, 4, 1)
     FIELD(A53_STATUS, NVALFIQ, 3, 1)
     FIELD(A53_STATUS, NWFIPIPESTOPPED, 2, 1)
     FIELD(A53_STATUS, NWFEPIPESTOPPED, 1, 1)
     FIELD(A53_STATUS, NCLKSTOPPED, 0, 1)
-REG32(A53_PWRDWN, 0x308)
+REG32(A53_PWRDWN, 0x278)
     FIELD(A53_PWRDWN, EN, 0, 1)
 
-#define RPU_CTRL_R_MAX (R_RPU_1_AXI_OVER + 1)
+#define RPU_CTRL_R_MAX (R_A53_PWRDWN + 1)
 
 #define NUM_CONT_OUT_IRQS    10
 
@@ -418,6 +418,7 @@ typedef struct XlnxZynqMPRPUCtrl {
     /* GIC associated to the RPUs. */
 #ifdef HPSC_R52
     GICv3State *gic;
+    GICv3State *A53_gic;
 #else
     XlnxSCUGICState *gic;
 #endif
@@ -866,6 +867,11 @@ static void rpu_realize(DeviceState *dev, Error **errp)
         return;
     }
 
+    if (!s->A53_gic) {
+        error_setg(errp, "gic-for-A53");
+        return;
+    }
+
     /* RPUs starts in lockstep mode, so the rpu1 caches are not accessible. */
     memory_region_set_enabled(s->icache_for_rpu1, false);
     memory_region_set_enabled(s->dcache_for_rpu1, false);
@@ -979,10 +985,16 @@ static void rpu_init(Object *obj)
                              OBJ_PROP_LINK_UNREF_ON_RELEASE,
                              &error_abort);
 
+    object_property_add_link(obj, "gic-for-A53", TYPE_ARM_GICV3,
+                             (Object **)&s->A53_gic,
+                             qdev_prop_allow_set_link_before_realize,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+
     /* comp_fault gpios are connected to the PMU. */
-    qdev_init_gpio_out_named(DEVICE(obj), s->comp_fault, "comp_fault", 2);
+    qdev_init_gpio_out_named(DEVICE(obj), s->comp_fault, "comp_fault", 3);
     /* wfi_out is used to connect to PMU GPIs. */
-    qdev_init_gpio_out_named(DEVICE(obj), s->wfi_out, "wfi_out", 2);
+    qdev_init_gpio_out_named(DEVICE(obj), s->wfi_out, "wfi_out", 3);
 
     for (i = 0; i < NUM_CONT_OUT_IRQS; i++) {
         qdev_init_gpio_out_named(DEVICE(obj), &s->cont_out_gpios[i],
@@ -992,7 +1004,7 @@ static void rpu_init(Object *obj)
     /* wfi_in is used as input from CPUs as wfi request. */
     qdev_init_gpio_in_named(DEVICE(obj), zynqmp_rpu_0_handle_wfi, "wfi_in_0", 1);
     qdev_init_gpio_in_named(DEVICE(obj), zynqmp_rpu_1_handle_wfi, "wfi_in_1", 1);
-    qdev_init_gpio_in_named(DEVICE(obj), zynqmp_a53_handle_wfi, "wfi_in_1", 1);
+    qdev_init_gpio_in_named(DEVICE(obj), zynqmp_a53_handle_wfi, "wfi_in_2", 1);
 }
 
 static const VMStateDescription vmstate_rpu = {
@@ -1031,8 +1043,8 @@ static const FDTGenericGPIOSet rpu_client_gpios [] = {
     {
         .names = &fdt_generic_gpio_name_set_gpio,
         .gpios = (FDTGenericGPIOConnection [])  {
-            { .name = "comp_fault",         .fdt_index = 0, .range = 2 },
-            { .name = "wfi_out",            .fdt_index = 2, .range = 2 },
+            { .name = "comp_fault",         .fdt_index = 0, .range = 3 },
+            { .name = "wfi_out",            .fdt_index = 3, .range = 3 },
             { },
         },
     },
