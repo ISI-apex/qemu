@@ -95,18 +95,19 @@ DEP_REG32(DDR_CNTRL, 0x70)
     DEP_FIELD(DDR_CNTRL, RET, 1, 0)
 DEP_REG32(PWR_STATE, 0x100)
 #ifdef HPSC
-    DEP_FIELD(PWR_STATE, PL, 1, 27)
-    DEP_FIELD(PWR_STATE, FP, 1, 26)
-    DEP_FIELD(PWR_STATE, USB1, 1, 25)
-    DEP_FIELD(PWR_STATE, USB0, 1, 24)
-    DEP_FIELD(PWR_STATE, OCM_BANK3, 1, 23)
-    DEP_FIELD(PWR_STATE, OCM_BANK2, 1, 22)
-    DEP_FIELD(PWR_STATE, OCM_BANK1, 1, 21)
-    DEP_FIELD(PWR_STATE, OCM_BANK0, 1, 20)
-    DEP_FIELD(PWR_STATE, TCM1B, 1, 19)
-    DEP_FIELD(PWR_STATE, TCM1A, 1, 18)
-    DEP_FIELD(PWR_STATE, TCM0B, 1, 17)
-    DEP_FIELD(PWR_STATE, TCM0A, 1, 16)
+    DEP_FIELD(PWR_STATE, PL, 1, 28)
+    DEP_FIELD(PWR_STATE, FP, 1, 27)
+    DEP_FIELD(PWR_STATE, USB1, 1, 26)
+    DEP_FIELD(PWR_STATE, USB0, 1, 25)
+    DEP_FIELD(PWR_STATE, OCM_BANK3, 1, 24)
+    DEP_FIELD(PWR_STATE, OCM_BANK2, 1, 23)
+    DEP_FIELD(PWR_STATE, OCM_BANK1, 1, 22)
+    DEP_FIELD(PWR_STATE, OCM_BANK0, 1, 21)
+    DEP_FIELD(PWR_STATE, TCM1B, 1, 20)
+    DEP_FIELD(PWR_STATE, TCM1A, 1, 19)
+    DEP_FIELD(PWR_STATE, TCM0B, 1, 18)
+    DEP_FIELD(PWR_STATE, TCM0A, 1, 17)
+    DEP_FIELD(PWR_STATE, R5_2, 1, 16)
     DEP_FIELD(PWR_STATE, R5_1, 1, 15)
     DEP_FIELD(PWR_STATE, R5_0, 1, 14)
     DEP_FIELD(PWR_STATE, L2_BANK0, 1, 11)
@@ -169,19 +170,19 @@ DEP_REG32(PWR_SUPPLY_STATUS, 0x10c)
     DEP_FIELD(PWR_SUPPLY_STATUS, VCC_PSINTFP, 1, 0)
 DEP_REG32(REQ_PWRUP_STATUS, 0x110)
 #ifdef HPSC
-    DEP_FIELD(REQ_PWRUP_STATUS, PL, 1, 27)
-    DEP_FIELD(REQ_PWRUP_STATUS, FP, 1, 26)
-    DEP_FIELD(REQ_PWRUP_STATUS, USB1, 1, 25)
-    DEP_FIELD(REQ_PWRUP_STATUS, USB0, 1, 24)
-    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK3, 1, 23)
-    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK2, 1, 22)
-    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK1, 1, 21)
-    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK0, 1, 20)
-    DEP_FIELD(REQ_PWRUP_STATUS, TCM1B, 1, 19)
-    DEP_FIELD(REQ_PWRUP_STATUS, TCM1A, 1, 18)
-    DEP_FIELD(REQ_PWRUP_STATUS, TCM0B, 1, 17)
-    DEP_FIELD(REQ_PWRUP_STATUS, TCM0A, 1, 16)
-    DEP_FIELD(REQ_PWRUP_STATUS, RPU, 1, 14)
+    DEP_FIELD(REQ_PWRUP_STATUS, PL, 1, 28)
+    DEP_FIELD(REQ_PWRUP_STATUS, FP, 1, 27)
+    DEP_FIELD(REQ_PWRUP_STATUS, USB1, 1, 26)
+    DEP_FIELD(REQ_PWRUP_STATUS, USB0, 1, 25)
+    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK3, 1, 24)
+    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK2, 1, 23)
+    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK1, 1, 22)
+    DEP_FIELD(REQ_PWRUP_STATUS, OCM_BANK0, 1, 21)
+    DEP_FIELD(REQ_PWRUP_STATUS, TCM1B, 1, 20)
+    DEP_FIELD(REQ_PWRUP_STATUS, TCM1A, 1, 19)
+    DEP_FIELD(REQ_PWRUP_STATUS, TCM0B, 1, 18)
+    DEP_FIELD(REQ_PWRUP_STATUS, TCM0A, 1, 17)
+    DEP_FIELD(REQ_PWRUP_STATUS, RPU, 3, 14)
     DEP_FIELD(REQ_PWRUP_STATUS, L2_BANK0, 1, 11)
     DEP_FIELD(REQ_PWRUP_STATUS, PP1, 1, 9)
     DEP_FIELD(REQ_PWRUP_STATUS, PP0, 1, 8)
@@ -213,19 +214,19 @@ DEP_REG32(REQ_PWRUP_STATUS, 0x110)
     DEP_FIELD(REQ_PWRUP_STATUS, ACPU0, 1, 0)
 DEP_REG32(REQ_PWRUP_INT_MASK, 0x114)
 #ifdef HPSC
-    DEP_FIELD(REQ_PWRUP_INT_MASK, PL, 1, 27)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, FP, 1, 26)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, USB1, 1, 25)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, USB0, 1, 24)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK3, 1, 23)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK2, 1, 22)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK1, 1, 21)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK0, 1, 20)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM1B, 1, 19)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM1A, 1, 18)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM0B, 1, 17)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM0A, 1, 16)
-    DEP_FIELD(REQ_PWRUP_INT_MASK, RPU, 1, 14)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, PL, 1, 28)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, FP, 1, 27)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, USB1, 1, 26)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, USB0, 1, 25)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK3, 1, 24)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK2, 1, 23)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK1, 1, 22)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, OCM_BANK0, 1, 21)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM1B, 1, 20)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM1A, 1, 19)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM0B, 1, 18)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, TCM0A, 1, 17)
+    DEP_FIELD(REQ_PWRUP_INT_MASK, RPU, 3, 14)
     DEP_FIELD(REQ_PWRUP_INT_MASK, L2_BANK0, 1, 11)
     DEP_FIELD(REQ_PWRUP_INT_MASK, PP1, 1, 9)
     DEP_FIELD(REQ_PWRUP_INT_MASK, PP0, 1, 8)
@@ -389,19 +390,19 @@ DEP_REG32(REQ_PWRUP_TRIG, 0x120)
     DEP_FIELD(REQ_PWRUP_TRIG, ACPU0, 1, 0)
 DEP_REG32(REQ_PWRDWN_STATUS, 0x210)
 #ifdef HPSC
-    DEP_FIELD(REQ_PWRDWN_STATUS, PL, 1, 27)
-    DEP_FIELD(REQ_PWRDWN_STATUS, FP, 1, 26)
-    DEP_FIELD(REQ_PWRDWN_STATUS, USB1, 1, 25)
-    DEP_FIELD(REQ_PWRDWN_STATUS, USB0, 1, 24)
-    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK3, 1, 23)
-    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK2, 1, 22)
-    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK1, 1, 21)
-    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK0, 1, 20)
-    DEP_FIELD(REQ_PWRDWN_STATUS, TCM1B, 1, 19)
-    DEP_FIELD(REQ_PWRDWN_STATUS, TCM1A, 1, 18)
-    DEP_FIELD(REQ_PWRDWN_STATUS, TCM0B, 1, 17)
-    DEP_FIELD(REQ_PWRDWN_STATUS, TCM0A, 1, 16)
-    DEP_FIELD(REQ_PWRDWN_STATUS, RPU, 1, 14)
+    DEP_FIELD(REQ_PWRDWN_STATUS, PL, 1, 28)
+    DEP_FIELD(REQ_PWRDWN_STATUS, FP, 1, 27)
+    DEP_FIELD(REQ_PWRDWN_STATUS, USB1, 1, 26)
+    DEP_FIELD(REQ_PWRDWN_STATUS, USB0, 1, 25)
+    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK3, 1, 24)
+    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK2, 1, 23)
+    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK1, 1, 22)
+    DEP_FIELD(REQ_PWRDWN_STATUS, OCM_BANK0, 1, 21)
+    DEP_FIELD(REQ_PWRDWN_STATUS, TCM1B, 1, 20)
+    DEP_FIELD(REQ_PWRDWN_STATUS, TCM1A, 1, 19)
+    DEP_FIELD(REQ_PWRDWN_STATUS, TCM0B, 1, 18)
+    DEP_FIELD(REQ_PWRDWN_STATUS, TCM0A, 1, 17)
+    DEP_FIELD(REQ_PWRDWN_STATUS, RPU, 3, 14)
     DEP_FIELD(REQ_PWRDWN_STATUS, L2_BANK0, 1, 11)
     DEP_FIELD(REQ_PWRDWN_STATUS, PP1, 1, 9)
     DEP_FIELD(REQ_PWRDWN_STATUS, PP0, 1, 8)
@@ -433,19 +434,19 @@ DEP_REG32(REQ_PWRDWN_STATUS, 0x210)
     DEP_FIELD(REQ_PWRDWN_STATUS, ACPU0, 1, 0)
 DEP_REG32(REQ_PWRDWN_INT_MASK, 0x214)
 #ifdef HPSC
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, PL, 1, 27)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, FP, 1, 26)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, USB1, 1, 25)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, USB0, 1, 24)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK3, 1, 23)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK2, 1, 22)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK1, 1, 21)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK0, 1, 20)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM1B, 1, 19)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM1A, 1, 18)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM0B, 1, 17)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM0A, 1, 16)
-    DEP_FIELD(REQ_PWRDWN_INT_MASK, RPU, 1, 14)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, PL, 1, 28)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, FP, 1, 27)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, USB1, 1, 26)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, USB0, 1, 25)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK3, 1, 24)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK2, 1, 23)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK1, 1, 22)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, OCM_BANK0, 1, 21)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM1B, 1, 20)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM1A, 1, 19)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM0B, 1, 18)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, TCM0A, 1, 17)
+    DEP_FIELD(REQ_PWRDWN_INT_MASK, RPU, 3, 14)
     DEP_FIELD(REQ_PWRDWN_INT_MASK, L2_BANK0, 1, 11)
     DEP_FIELD(REQ_PWRDWN_INT_MASK, PP1, 1, 9)
     DEP_FIELD(REQ_PWRDWN_INT_MASK, PP0, 1, 8)
@@ -1841,11 +1842,11 @@ static DepRegisterAccessInfo pmu_global_regs_info[] = {
         .rsvd = 0xfffffffe,
     },{ .name = "PWR_STATE",  .decode.addr = A_PWR_STATE,
 #ifdef HPSC
-        .reset = 0x0fffcbff,
-        .rsvd = 0xf0003400,
+        .reset = 0x1fffcbff,
+        .rsvd =  0xe0003400,
 #else
         .reset = 0x00fffcbf,
-        .rsvd = 0xff000340,
+        .rsvd =  0xff000340,
 #endif
         .ro = 0xffffffff,
     },{ .name = "AUX_PWR_STATE",  .decode.addr = A_AUX_PWR_STATE,
@@ -1864,24 +1865,24 @@ static DepRegisterAccessInfo pmu_global_regs_info[] = {
         .ro = 0xffffffff,
     },{ .name = "REQ_PWRUP_STATUS",  .decode.addr = A_REQ_PWRUP_STATUS,
 #ifdef HPSC
-        .rsvd = 0xf000b400,
-        .ro =   0xf000b400,
-        .w1c =   0xfff4bff,
+        .rsvd = 0xe0003400,
+        .ro =   0xe0003400,
+        .w1c =  0x1fffcbff,
 #else
         .rsvd = 0xff000b40,
-        .ro = 0xff000b40,
-        .w1c = 0xfff4bf,
+        .ro =   0xff000b40,
+        .w1c =  0x00fff4bf,
 #endif
         .post_write = req_pwrup_status_postw,
     },{ .name = "REQ_PWRUP_INT_MASK",  .decode.addr = A_REQ_PWRUP_INT_MASK,
 #ifdef HPSC
-        .reset =  0xfff4bff,
-        .rsvd =  0xf000b400,
+        .reset = 0x1fffcbff,
+        .rsvd =  0xe0003400,
         .ro =    0xffffffff,
 #else
-        .reset = 0xfff4bf,
-        .rsvd = 0xff000b40,
-        .ro = 0xffffffff,
+        .reset = 0x00fff4bf,
+        .rsvd =  0xff000b40,
+        .ro =    0xffffffff,
 #endif
     },{ .name = "REQ_PWRUP_INT_EN",  .decode.addr = A_REQ_PWRUP_INT_EN,
         .pre_write = req_pwrup_int_en_prew,
@@ -1891,19 +1892,19 @@ static DepRegisterAccessInfo pmu_global_regs_info[] = {
         .pre_write = req_pwrup_trig_prew,
     },{ .name = "REQ_PWRDWN_STATUS",  .decode.addr = A_REQ_PWRDWN_STATUS,
 #ifdef HPSC
-        .rsvd = 0xf000b400,
-        .ro =   0xf000b400,
-        .w1c =   0xfff4bff,
+        .rsvd = 0xe0003400,
+        .ro =   0xe0003400,
+        .w1c =  0x1fffcbff,
 #else
         .rsvd = 0xff000b40,
-        .ro = 0xff000b40,
-        .w1c = 0xfff4bf,
+        .ro =   0xff000b40,
+        .w1c =  0x00fff4bf,
 #endif
         .post_write = req_pwrdwn_status_postw,
     },{ .name = "REQ_PWRDWN_INT_MASK",  .decode.addr = A_REQ_PWRDWN_INT_MASK,
 #ifdef HPSC
-        .reset =  0xfff4bff,
-        .rsvd =  0xf000b400,
+        .reset = 0x1fffcbff,
+        .rsvd =  0xe0003400,
         .ro =    0xffffffff,
 #else
         .reset = 0xfff4bf,
@@ -2273,7 +2274,7 @@ static void pmu_global_init(Object *obj)
 
     qdev_init_gpio_in_named(DEVICE(obj), gpio_mb_sleep_h, "mb_sleep", 1);
 #ifdef HPSC
-    qdev_init_gpio_in_named(DEVICE(obj), pwr_state_handler, "pwr_state", 28);
+    qdev_init_gpio_in_named(DEVICE(obj), pwr_state_handler, "pwr_state", 29);
 #else
     qdev_init_gpio_in_named(DEVICE(obj), pwr_state_handler, "pwr_state", 24);
 #endif
@@ -2327,7 +2328,7 @@ static const FDTGenericGPIOSet pmu_global_client_gpios[] = {
       .names = &pwr_state_gpios_names,
       .gpios = (FDTGenericGPIOConnection[]) {
 #ifdef HPSC
-        { .name = "pwr_state", .fdt_index = 0, .range = 28 },
+        { .name = "pwr_state", .fdt_index = 0, .range = 29 },
 #else
         { .name = "pwr_state", .fdt_index = 0, .range = 24 },
 #endif
