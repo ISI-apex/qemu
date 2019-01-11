@@ -127,6 +127,7 @@ typedef struct GICState {
      */
     /* We don't use all of this space but we allocate all of it.  */
     uint32_t apr[GIC_NR_APRS][GIC_NCPU];
+    uint32_t nsapr[GIC_NR_APRS][GIC_NCPU];
     uint32_t apr_guard[32];
 
     struct {

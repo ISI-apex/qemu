@@ -54,11 +54,12 @@
 #define REV_11MPCORE 0
 
 void gic_set_pending_private(GICState *s, int cpu, int irq);
-uint32_t gic_acknowledge_irq(GICState *s, int cpu, bool secure);
-void gic_complete_irq(GICState *s, int cpu, int irq, bool secure);
+uint32_t gic_acknowledge_irq(GICState *s, int cpu, MemTxAttrs attrs);
+void gic_complete_irq(GICState *s, int cpu, int irq, MemTxAttrs attrs);
 void gic_update(GICState *s);
 void gic_init_irqs_and_distributor(GICState *s);
-void gic_set_priority(GICState *s, int cpu, int irq, uint8_t val);
+void gic_set_priority(GICState *s, int cpu, int irq, uint8_t val,
+                      MemTxAttrs attrs);
 
 static inline bool gic_test_pending(GICState *s, int irq, int cm)
 {
