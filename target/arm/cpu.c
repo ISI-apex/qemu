@@ -732,7 +732,6 @@ static void arm_cpu_initfn(Object *obj)
     cpu->gt_timer[GTIMER_SEC] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,
                                                 arm_gt_stimer_cb, cpu);
 
-#ifdef XILINX
     qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_PHYS],
                                     "timer_phys", 1);
     qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_VIRT],
@@ -741,9 +740,6 @@ static void arm_cpu_initfn(Object *obj)
                                     "timer_hyp", 1);
     qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_SEC],
                                     "timer_sec", 1);
-#else
-    qdev_init_gpio_out(DEVICE(cpu), cpu->gt_timer_outputs, ARRAY_SIZE(cpu->gt_timer_outputs));
-#endif
     qdev_init_gpio_out_named(DEVICE(cpu), &cpu->wfi, "wfi", 1);
 
     qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gicv3_maintenance_interrupt,
