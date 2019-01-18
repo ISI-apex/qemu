@@ -2374,51 +2374,6 @@ void arm_gt_stimer_cb(void *opaque)
     gt_recalc_timer(cpu, GTIMER_SEC);
 }
 
-#ifdef HPSC
-static const ARMCPRegInfo v8r_pmev_reginfo[] = {
-    { .name = "PMEVCNTR0", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 0,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[0]),
-      .resetvalue = 0, },
-    { .name = "PMEVCNTR1", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 1,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[1]),
-      .resetvalue = 0, },
-    { .name = "PMEVCNTR2", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 2,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[2]),
-      .resetvalue = 0, },
-    { .name = "PMEVCNTR3", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 3,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[3]),
-      .resetvalue = 0, },
-    { .name = "PMEVTYPER0", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 0,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[0]),
-      .resetvalue = 0, },
-    { .name = "PMEVTYPER1", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 1,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[1]),
-      .resetvalue = 0, },
-    { .name = "PMEVTYPER2", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 2,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[2]),
-      .resetvalue = 0, },
-    { .name = "PMEVTYPER3", .state = ARM_CP_STATE_AA32,
-      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 3,
-      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
-      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[3]),
-      .resetvalue = 0, },
-    REGINFO_SENTINEL
-};
-#endif
 static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
     /* Note that CNTFRQ is purely reads-as-written for the benefit
      * of software; writing it doesn't actually change the timer frequency.
@@ -2621,6 +2576,52 @@ static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
+#endif
+
+#ifdef HPSC
+static const ARMCPRegInfo v8r_pmev_reginfo[] = {
+    { .name = "PMEVCNTR0", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 0,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[0]),
+      .resetvalue = 0, },
+    { .name = "PMEVCNTR1", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 1,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[1]),
+      .resetvalue = 0, },
+    { .name = "PMEVCNTR2", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 2,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[2]),
+      .resetvalue = 0, },
+    { .name = "PMEVCNTR3", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 8, .opc2 = 3,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevcntr[3]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER0", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 0,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[0]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER1", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 1,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[1]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER2", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 2,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[2]),
+      .resetvalue = 0, },
+    { .name = "PMEVTYPER3", .state = ARM_CP_STATE_AA32,
+      .cp = 15, .opc1 = 0, .crn = 14, .crm = 12, .opc2 = 3,
+      .access = PL0_RW, .type = ARM_CP_IO, .raw_writefn = raw_write,
+      .fieldoffset = offsetof(CPUARMState, v8r.pmevtyper[3]),
+      .resetvalue = 0, },
+    REGINFO_SENTINEL
+};
 #endif
 
 static void par_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
