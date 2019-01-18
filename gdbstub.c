@@ -46,6 +46,14 @@
 #define GDB_ATTACHED "1"
 #endif
 
+// Multi-arch debugging is not supported, so only one cluster can be debugged
+// at a time. Select the index of the cluster by overriding this macro by
+// apeending to the CFLAGS env variable during configure like so:
+//      CFALGS+=" -DGDB_TARGET_CLUSTER=X " ../configure ...
+#ifndef GDB_TARGET_CLUSTER
+#define GDB_TARGET_CLUSTER 0
+#endif
+
 static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
                                          uint8_t *buf, int len, bool is_write)
 {
@@ -987,13 +995,13 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
         put_packet(s, "OK");
         break;
     case '?':
-        s->cur_cluster = 0;
+        s->cur_cluster = GDB_TARGET_CLUSTER;
         cl = &s->clusters[s->cur_cluster];
         s->c_cpu = cl->cpus.first;
         s->g_cpu = cl->cpus.first;
         /* TODO: Make this return the correct value for user-mode.  */
         snprintf(buf, sizeof(buf), "T%02xthread:%s;", GDB_SIGNAL_TRAP,
-                 gdb_gen_thread_id(s, s->cur_cluster + 1,
+                 gdb_gen_thread_id(s, GDB_TARGET_CLUSTER + 1,
                                    (s->c_cpu->cpu_index + 1)));
         put_packet(s, buf);
         /* Remove all the breakpoints when this query is issued,
@@ -1091,7 +1099,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
                 s->g_cpu = cl->cpus.first;
                 snprintf(buf, sizeof(buf), "T%02xthread:%s;",
                          GDB_SIGNAL_TRAP,
-                         gdb_gen_thread_id(s, cluster,
+                         gdb_gen_thread_id(s, GDB_TARGET_CLUSTER + 1,
                                            (s->c_cpu->cpu_index + 1)));
 
                 put_packet(s, buf);
@@ -1265,7 +1273,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
     case 'H':
         type = *p++;
         gdb_thread_id(p, &p, &cluster, &thread);
-        cpu = find_cpu(s, cluster, thread);
+        cpu = find_cpu(s, GDB_TARGET_CLUSTER, GDB_TARGET_CLUSTER + 1);
         if (cpu == NULL) {
             put_packet(s, "E22");
             break;
@@ -1370,12 +1378,12 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             /* "Current thread" remains vague in the spec, so always return
              *  the first CPU (gdb returns the first thread). */
             snprintf(buf, sizeof(buf), "C%s",
-                     gdb_gen_thread_id(s, s->cur_cluster + 1,
+                     gdb_gen_thread_id(s, GDB_TARGET_CLUSTER + 1,
                                        (cl->cpus.first->cpu_index + 1)));
             put_packet(s, buf);
             break;
         } else if (strcmp(p,"fThreadInfo") == 0) {
-            s->query_cluster = 0;
+            s->query_cluster = GDB_TARGET_CLUSTER;
             s->query_cpu = s->clusters[s->query_cluster].cpus.first;
             goto report_cpuinfo;
         } else if (strcmp(p,"sThreadInfo") == 0) {
@@ -1387,7 +1395,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
                 put_packet(s, buf);
                 if (s->query_cpu == s->clusters[s->query_cluster].cpus.last) {
                     s->query_cluster++;
-                    if (s->query_cluster == s->num_clusters) {
+                    if (s->query_cluster == GDB_TARGET_CLUSTER + 1) {
                         s->query_cluster = 0;
                     }
                     s->query_cpu = NULL;
@@ -1620,7 +1628,7 @@ static void gdb_vm_state_change(void *opaque, int running, RunState state)
             snprintf(buf, sizeof(buf),
                      "T%02xthread:%s;%swatch:" TARGET_FMT_lx ";",
                      GDB_SIGNAL_TRAP,
-                     gdb_gen_thread_id(s, s->cur_cluster + 1,
+                     gdb_gen_thread_id(s, GDB_TARGET_CLUSTER + 1,
                                        (cpu->cpu_index + 1)),
                      type,
                      (target_ulong)cpu->watchpoint_hit->vaddr);
@@ -1657,7 +1665,7 @@ static void gdb_vm_state_change(void *opaque, int running, RunState state)
     }
     gdb_set_stop_cpu(cpu);
     snprintf(buf, sizeof(buf), "T%02xthread:%s;", ret,
-             gdb_gen_thread_id(s, s->cur_cluster + 1, (cpu->cpu_index + 1)));
+             gdb_gen_thread_id(s, GDB_TARGET_CLUSTER + 1, (cpu->cpu_index + 1)));
 
 send_packet:
     put_packet(s, buf);
@@ -2075,12 +2083,24 @@ void gdbserver_fork(CPUState *cpu)
     cpu_watchpoint_remove_all(cpu, BP_GDB);
 }
 #else
+static bool prefix_match(const char *s, const char *t, char delim)
+{
+    int d = 0;
+    while (s[d] && t[d] && s[d] != delim) {
+        if (s[d] != t[d])
+            return false;
+        ++d;
+    }
+    if (!s[d] || !t[d] || t[d] != delim)
+        return false;
+    return true;
+}
 static void gdb_autosplit_cpus(GDBState *s)
 {
     /* FIXME: this should be done explicitely from a QOM CLUSTER
      * container. Maybe autocreated from dts files.
      * In the meantime, follow a simple logic. Consecutive cores
-     * of the same kind, form a cluster.
+     * of the same kind or with same name prefix, form a cluster.
      */
     CPUState *cpu = first_cpu;
     CPUState *cpu_prev = NULL;
@@ -2089,7 +2109,8 @@ static void gdb_autosplit_cpus(GDBState *s)
     assert(s->num_clusters == 0);
 
     while (cpu) {
-        if (!cpu_prev || (CPU_GET_CLASS(cpu) != CPU_GET_CLASS(cpu_prev))) {
+        if (!cpu_prev || (CPU_GET_CLASS(cpu) != CPU_GET_CLASS(cpu_prev)) ||
+            !prefix_match(cpu->parent_obj.id, cpu_prev->parent_obj.id, '@')) {
             /* New cluster.  */
             s->clusters = g_renew(typeof(s->clusters[0]), s->clusters,
                                   s->num_clusters + 1);
