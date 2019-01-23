@@ -24,6 +24,7 @@
 
 #include "kvm-consts.h"
 #include "hw/registerfields.h"
+#include "hw/arm/arm-system-counter.h"
 
 #define HPSC_TRCH
 #define HPSC_M4F
@@ -721,10 +722,17 @@ struct ARMCPU {
     uint64_t *cpreg_vmstate_values;
     int32_t cpreg_vmstate_array_len;
 
-    /* Timers used by the generic (architected) timer */
-    QEMUTimer *gt_timer[NUM_GTIMERS];
+    /* System Counter is the backend timer that drives the Generic Timer */
+    ARMSystemCounter *sys_counter;
+    /* Events for callbacks from the system counter */
+    ARMSystemCounterEvent *sys_counter_events[NUM_GTIMERS];
+    /* Generic Timer is System Counter divided by this scale factor */
+    unsigned gt_scale;
+    /* Maximum counter value of the ARM Generic Timer: scaled max of SysCnt */
+    uint64_t gt_max_count;
     /* GPIO outputs for generic timer */
     qemu_irq gt_timer_outputs[NUM_GTIMERS];
+
     /* GPIO output for GICv3 maintenance interrupt signal */
     qemu_irq gicv3_maintenance_interrupt;
     /* GPIO output for the PMU interrupt */

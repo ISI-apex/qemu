@@ -36,6 +36,7 @@
 #include "disas/capstone.h"
 
 #include "hw/fdt_generic_util.h"
+#include "hw/arm/arm-system-counter.h"
 
 #define HPSC_R52
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
@@ -723,14 +724,11 @@ static void arm_cpu_initfn(Object *obj)
     qdev_init_gpio_in_named(DEVICE(cpu), arm_cpu_set_ncpuhalt, "ncpuhalt", 1);
     qdev_init_gpio_in_named(DEVICE(cpu), arm_cpu_set_vinithi, "vinithi", 1);
 
-    cpu->gt_timer[GTIMER_PHYS] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,
-                                                arm_gt_ptimer_cb, cpu);
-    cpu->gt_timer[GTIMER_VIRT] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,
-                                                arm_gt_vtimer_cb, cpu);
-    cpu->gt_timer[GTIMER_HYP] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,
-                                                arm_gt_htimer_cb, cpu);
-    cpu->gt_timer[GTIMER_SEC] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,
-                                                arm_gt_stimer_cb, cpu);
+    object_property_add_link(obj, "arm-system-counter", TYPE_ARM_SYSTEM_COUNTER,
+                             (Object **)&cpu->sys_counter,
+                             qdev_prop_allow_set_link_before_realize,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
 
     qdev_init_gpio_out_named(DEVICE(cpu), &cpu->gt_timer_outputs[GTIMER_PHYS],
                                     "timer_phys", 1);
@@ -937,6 +935,17 @@ static void arm_cpu_post_init(Object *obj)
 static void arm_cpu_finalizefn(Object *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
+    CPUARMState *env = &cpu->env;
+
+    if (arm_feature(env, ARM_FEATURE_GENERIC_TIMER)) {
+        ARMSystemCounterClass *ascc =
+                ARM_SYSTEM_COUNTER_GET_CLASS(cpu->sys_counter);
+        ascc->event_destroy(cpu->sys_counter_events[GTIMER_PHYS]);
+        ascc->event_destroy(cpu->sys_counter_events[GTIMER_VIRT]);
+        ascc->event_destroy(cpu->sys_counter_events[GTIMER_HYP]);
+        ascc->event_destroy(cpu->sys_counter_events[GTIMER_SEC]);
+    }
+
     g_hash_table_destroy(cpu->cp_regs);
 }
 
@@ -1166,6 +1175,33 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
 
     if (arm_feature(env, ARM_FEATURE_EL3)) {
         set_feature(env, ARM_FEATURE_VBAR);
+    }
+
+    if (arm_feature(env, ARM_FEATURE_GENERIC_TIMER)) {
+        /* Link the Generic Timers to the System Counter. */
+
+        ARMSystemCounterClass *ascc =
+                ARM_SYSTEM_COUNTER_GET_CLASS(cpu->sys_counter);
+
+        /* Scale s.t. GT increments by 1 on every tick of Sys Counter clock
+         * at max freq of that clock.  This is a constraint imposed by ARM HW
+         * (citation needed). For the default ARM Generic System Counter model,
+         * which increments by 1 on each cycle of its clock, the gt_scale will
+         * be 1, but for other counters scale may need to be > 1. */
+        cpu->gt_scale = ascc->max_delta(cpu->sys_counter);
+        cpu->gt_max_count = ascc->max_count(cpu->sys_counter) / cpu->gt_scale;
+
+        qemu_log("ARM GenericTimer scale %u max %lu\n",
+                 cpu->gt_scale, cpu->gt_max_count);
+
+        cpu->sys_counter_events[GTIMER_PHYS] =
+            ascc->event_create(cpu->sys_counter, arm_gt_ptimer_cb, cpu);
+        cpu->sys_counter_events[GTIMER_VIRT] =
+            ascc->event_create(cpu->sys_counter, arm_gt_vtimer_cb, cpu);
+        cpu->sys_counter_events[GTIMER_HYP] =
+            ascc->event_create(cpu->sys_counter, arm_gt_htimer_cb, cpu);
+        cpu->sys_counter_events[GTIMER_SEC] =
+            ascc->event_create(cpu->sys_counter, arm_gt_stimer_cb, cpu);
     }
 
     register_cp_regs_for_features(cpu);
