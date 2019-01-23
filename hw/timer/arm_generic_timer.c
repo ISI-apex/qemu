@@ -31,15 +31,29 @@
 #include "qapi/error.h"
 #include "qemu/log.h"
 #include "qemu/timer.h"
+#include "hw/arm/arm-system-counter.h"
 
 #ifndef ARM_GEN_TIMER_ERR_DEBUG
 #define ARM_GEN_TIMER_ERR_DEBUG 0
 #endif
 
-#define TYPE_ARM_GEN_TIMER "arm.generic-timer"
+#define DB_PRINT_L(lvl, fmt, args...) do {\
+    if (ARM_GEN_TIMER_ERR_DEBUG >= lvl) {\
+        qemu_log(TYPE_ARM_GEN_TIMER ": %s:" fmt, __func__, ## args);\
+    } \
+} while (0);
+
+#define DB_PRINT(fmt, args...) DB_PRINT_L(1, fmt, ## args)
+
+
+#define TYPE_ARM_GEN_TIMER              "arm.generic-timer"
+#define TYPE_ARM_GEN_TIMER_EVENT        "arm.generic-timer-event"
 
 #define ARM_GEN_TIMER(obj) \
      OBJECT_CHECK(ARMGenTimer, (obj), TYPE_ARM_GEN_TIMER)
+
+#define ARM_GEN_TIMER_EVENT(obj) \
+     OBJECT_CHECK(ARMGenTimerEvent, (obj), TYPE_ARM_GEN_TIMER_EVENT)
 
 DEP_REG32(COUNTER_CONTROL_REGISTER, 0x0)
     DEP_FIELD(COUNTER_CONTROL_REGISTER, EN, 1, 1)
@@ -52,12 +66,33 @@ DEP_REG32(BASE_FREQUENCY_ID_REGISTER, 0x20)
 
 #define R_MAX (R_BASE_FREQUENCY_ID_REGISTER + 1)
 
+/* Our timing backend (QEMU_CLOCK_VIRTUAL) has a fixed, non-configurable
+ * frequency, i.e. keeps time in units of ns.
+ *
+ * NOTE: This macro is not a configurable parameter, it is a fixed
+ * characteristic of the backend used to implement this System Counter model.
+ * To change the freq presented by this System Counter (and thus by ARM Generic
+ * Timers) change the freq-hz object property, not this macro. */
+#define CLK_FREQ_HZ 1000000000 /* 1 GHz */
+
+typedef struct ARMGenTimerEvent {
+    ARMSystemCounterEvent parent_obj;
+
+    QLIST_ENTRY(ARMGenTimerEvent) list_entry;
+
+    QEMUTimer timer;
+} ARMGenTimerEvent;
+
 typedef struct ARMGenTimer {
     SysBusDevice parent_obj;
     MemoryRegion iomem;
 
     bool enabled;
     uint64_t tick_offset;
+    uint32_t freq_hz; /* the modeled System Counter ticks at this freq */
+    uint32_t scale; /* relative to the timing backend */
+
+    QLIST_HEAD(se_list_head, ARMGenTimerEvent) slave_events;
 
     uint32_t regs[R_MAX];
     DepRegisterInfo regs_info[R_MAX];
@@ -216,11 +251,72 @@ static const MemoryRegionOps arm_gen_timer_ops = {
     },
 };
 
+static uint64_t arm_gen_timer_max_count(ARMSystemCounter *asc)
+{
+    ARMGenTimer *s = ARM_GEN_TIMER(asc);
+    return INT64_MAX / s->scale; /* see return type of qemu_clock_get_ns */
+}
+
+static unsigned arm_gen_timer_max_delta(ARMSystemCounter *asc)
+{
+    /* We increment by 1 on every cycle, and support only one clock freq. */
+    return 1;
+}
+
+static uint64_t arm_gen_timer_count(ARMSystemCounter *asc)
+{
+    ARMGenTimer *s = ARM_GEN_TIMER(asc);
+    uint64_t count_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    return count_ns / s->scale;
+}
+
+static ARMSystemCounterEvent *arm_gen_timer_event_create(
+                                        ARMSystemCounter *asc,
+                                        ARMSystemCounterEventCb *cb, void *arg)
+{
+    ARMGenTimer *s = ARM_GEN_TIMER(asc);
+    ARMGenTimerEvent *ge =
+        ARM_GEN_TIMER_EVENT(object_new(TYPE_ARM_GEN_TIMER_EVENT));
+    ARMSystemCounterEvent *e = ARM_SYSTEM_COUNTER_EVENT(ge);
+    e->sc = asc;
+    timer_init(&ge->timer, QEMU_CLOCK_VIRTUAL, s->scale, cb, arg);
+    QLIST_INSERT_HEAD(&s->slave_events, ge, list_entry);
+    return e;
+}
+
+static void arm_gen_timer_event_destroy(ARMSystemCounterEvent *e)
+{
+    ARMGenTimerEvent *ge = ARM_GEN_TIMER_EVENT(e);
+    e->sc = NULL;
+    QLIST_REMOVE(ge, list_entry);
+    timer_deinit(&ge->timer);
+    object_unref(OBJECT(e));
+}
+
+static void arm_gen_timer_event_schedule(ARMSystemCounterEvent *e,
+                                              uint64_t time)
+{
+    ARMGenTimerEvent *ge = ARM_GEN_TIMER_EVENT(e);
+    DB_PRINT("%s: slave event sched @ ticks %lx\n",
+             object_get_canonical_path(OBJECT(e->sc)), time);
+    timer_mod(&ge->timer, time);
+}
+
+static void arm_gen_timer_event_cancel(ARMSystemCounterEvent *e)
+{
+    ARMGenTimerEvent *ge = ARM_GEN_TIMER_EVENT(e);
+    DB_PRINT("%s: slave event cancel\n",
+             object_get_canonical_path(OBJECT(e->sc)));
+    timer_del(&ge->timer);
+}
+
 static void arm_gen_timer_realize(DeviceState *dev, Error **errp)
 {
     ARMGenTimer *s = ARM_GEN_TIMER(dev);
     const char *prefix = object_get_canonical_path(OBJECT(dev));
     unsigned int i;
+
+    s->scale = CLK_FREQ_HZ / s->freq_hz;
 
     for (i = 0; i < ARRAY_SIZE(arm_gen_timer_regs_info); ++i) {
         DepRegisterInfo *r =
@@ -259,26 +355,46 @@ static const VMStateDescription vmstate_arm_gen_timer = {
     }
 };
 
+static Property arm_gen_timer_props[] = {
+    DEFINE_PROP_UINT32("freq-hz",  ARMGenTimer,    freq_hz,       62500000),
+    DEFINE_PROP_END_OF_LIST()
+};
+
 static void arm_gen_timer_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
+    ARMSystemCounterClass *sc = ARM_SYSTEM_COUNTER_CLASS(klass);
 
     dc->reset = arm_gen_timer_reset;
     dc->realize = arm_gen_timer_realize;
     dc->vmsd = &vmstate_arm_gen_timer;
+    dc->props = arm_gen_timer_props;
+
+    sc->max_count = arm_gen_timer_max_count;
+    sc->max_delta = arm_gen_timer_max_delta;
+    sc->count = arm_gen_timer_count;
+    sc->event_create = arm_gen_timer_event_create;
+    sc->event_destroy = arm_gen_timer_event_destroy;
+    sc->event_schedule = arm_gen_timer_event_schedule;
+    sc->event_cancel = arm_gen_timer_event_cancel;
 }
 
-static const TypeInfo arm_gen_timer_info = {
-    .name          = TYPE_ARM_GEN_TIMER,
-    .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(ARMGenTimer),
-    .class_init    = arm_gen_timer_class_init,
-    .instance_init = arm_gen_timer_init,
+static const TypeInfo arm_gen_timer_info[] = {
+    {
+        .name          = TYPE_ARM_GEN_TIMER,
+        .parent        = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(ARMGenTimer),
+        .class_init    = arm_gen_timer_class_init,
+        .instance_init = arm_gen_timer_init,
+        .interfaces = (InterfaceInfo []) {
+            {TYPE_ARM_SYSTEM_COUNTER},
+        },
+    },
+    {
+        .name          = TYPE_ARM_GEN_TIMER_EVENT,
+        .parent        = TYPE_ARM_SYSTEM_COUNTER_EVENT,
+        .instance_size = sizeof(ARMGenTimerEvent),
+    },
 };
 
-static void arm_gen_timer_register_types(void)
-{
-    type_register_static(&arm_gen_timer_info);
-}
-
-type_init(arm_gen_timer_register_types)
+DEFINE_TYPES(arm_gen_timer_info)
