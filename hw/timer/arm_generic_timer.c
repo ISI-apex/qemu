@@ -316,6 +316,7 @@ static void arm_gen_timer_realize(DeviceState *dev, Error **errp)
     const char *prefix = object_get_canonical_path(OBJECT(dev));
     unsigned int i;
 
+    assert(s->freq_hz <= CLK_FREQ_HZ);
     s->scale = CLK_FREQ_HZ / s->freq_hz;
 
     for (i = 0; i < ARRAY_SIZE(arm_gen_timer_regs_info); ++i) {
