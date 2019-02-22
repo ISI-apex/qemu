@@ -8114,7 +8114,7 @@ static bool do_v7m_function_return(ARMCPU *cpu)
     return true;
 }
 
-static void arm_log_exception(int idx)
+static void arm_log_exception(int idx, char * id)
 {
     if (qemu_loglevel_mask(CPU_LOG_INT)) {
         const char *exc = NULL;
@@ -8144,7 +8144,7 @@ static void arm_log_exception(int idx)
         if (!exc) {
             exc = "unknown";
         }
-        qemu_log_mask(CPU_LOG_INT, "Taking exception %d [%s]\n", idx, exc);
+        qemu_log_mask(CPU_LOG_INT, "(%s): Taking exception %d [%s]\n", id, idx, exc);
     }
 }
 
@@ -8274,7 +8274,7 @@ void arm_v7m_cpu_do_interrupt(CPUState *cs)
     CPUARMState *env = &cpu->env;
     uint32_t lr;
 
-    arm_log_exception(cs->exception_index);
+    arm_log_exception(cs->exception_index, cs->parent_obj.id);
 
     /* For exceptions we just mark as pending on the NVIC, and let that
        handle it.  */
@@ -9014,7 +9014,7 @@ void arm_cpu_do_interrupt(CPUState *cs)
 
     assert(!arm_feature(env, ARM_FEATURE_M));
 
-    arm_log_exception(cs->exception_index);
+    arm_log_exception(cs->exception_index, cs->parent_obj.id);
     qemu_log_mask(CPU_LOG_INT, "...from EL%d to EL%d\n", arm_current_el(env),
                   new_el);
     if (qemu_loglevel_mask(CPU_LOG_INT)
