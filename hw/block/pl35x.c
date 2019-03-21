@@ -557,7 +557,7 @@ static int pl35x_init(SysBusDevice *dev)
     if (s->x == 0x2) { 
         pl35x_init_sram(dev, &s->itf[0]);
     }
-    if (s->x & 0x3) { /* PL353 have SRAM and NAND */
+    if (s->x == 0x3) { /* PL353 have SRAM and NAND */
         pl35x_init_nand(dev, &s->itf[1]);
         pl35x_init_sram(dev, &s->itf[0]);
     } else if (s->x == 4) { /* PL354 has a second SRAM */
