@@ -2372,6 +2372,18 @@ CpuInfoFastList *qmp_query_cpus_fast(Error **errp)
     return head;
 }
 
+static CPUState *get_cpu(int64_t index, Error **errp)
+{
+    CPUState *cpu;
+
+    cpu = qemu_get_cpu(index);
+    if (cpu == NULL) {
+        error_setg(errp, QERR_INVALID_PARAMETER_VALUE, "cpu-index",
+                   "a CPU number");
+        return NULL;
+    }
+	return cpu;
+}
 void qmp_memsave(int64_t addr, int64_t size, const char *filename,
                  bool has_cpu, int64_t cpu_index, Error **errp)
 {
@@ -2384,13 +2396,7 @@ void qmp_memsave(int64_t addr, int64_t size, const char *filename,
     if (!has_cpu) {
         cpu_index = 0;
     }
-
-    cpu = qemu_get_cpu(cpu_index);
-    if (cpu == NULL) {
-        error_setg(errp, QERR_INVALID_PARAMETER_VALUE, "cpu-index",
-                   "a CPU number");
-        return;
-    }
+    cpu = get_cpu(cpu_index, errp);
 
     f = fopen(filename, "wb");
     if (!f) {
@@ -2420,11 +2426,17 @@ exit:
 }
 
 void qmp_pmemsave(int64_t addr, int64_t size, const char *filename,
-                  Error **errp)
+                  bool has_cpu, int64_t cpu_index, Error **errp)
 {
     FILE *f;
     uint32_t l;
+    CPUState *cpu;
     uint8_t buf[1024];
+
+    if (!has_cpu) {
+        cpu_index = 0;
+    }
+    cpu = get_cpu(cpu_index, errp);
 
     f = fopen(filename, "wb");
     if (!f) {
@@ -2436,7 +2448,7 @@ void qmp_pmemsave(int64_t addr, int64_t size, const char *filename,
         l = sizeof(buf);
         if (l > size)
             l = size;
-        cpu_physical_memory_read(addr, buf, l);
+        cpu_physical_memory_read_cpu(cpu, addr, buf, l);
         if (fwrite(buf, 1, l, f) != l) {
             error_setg(errp, QERR_IO_ERROR);
             goto exit;
