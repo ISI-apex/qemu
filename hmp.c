@@ -1079,18 +1079,24 @@ void hmp_cpu(Monitor *mon, const QDict *qdict)
     }
 }
 
+static int get_monitor_cpu_index(Monitor *mon)
+{
+    int cpu_index = monitor_get_cpu_index();
+    if (cpu_index < 0) {
+        monitor_printf(mon, "No CPU available\n");
+    }
+	return cpu_index;
+}
+
 void hmp_memsave(Monitor *mon, const QDict *qdict)
 {
     uint32_t size = qdict_get_int(qdict, "size");
     const char *filename = qdict_get_str(qdict, "filename");
     uint64_t addr = qdict_get_int(qdict, "val");
     Error *err = NULL;
-    int cpu_index = monitor_get_cpu_index();
-
-    if (cpu_index < 0) {
-        monitor_printf(mon, "No CPU available\n");
-        return;
-    }
+	int cpu_index = get_monitor_cpu_index(mon);
+	if (cpu_index < 0)
+		return;
 
     qmp_memsave(addr, size, filename, true, cpu_index, &err);
     hmp_handle_error(mon, &err);
@@ -1102,8 +1108,11 @@ void hmp_pmemsave(Monitor *mon, const QDict *qdict)
     const char *filename = qdict_get_str(qdict, "filename");
     uint64_t addr = qdict_get_int(qdict, "val");
     Error *err = NULL;
+	int cpu_index = get_monitor_cpu_index(mon);
+	if (cpu_index < 0)
+		return;
 
-    qmp_pmemsave(addr, size, filename, &err);
+    qmp_pmemsave(addr, size, filename, true, cpu_index, &err);
     hmp_handle_error(mon, &err);
 }
 
