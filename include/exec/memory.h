@@ -1851,6 +1851,10 @@ void stq_be_phys_cached(MemoryRegionCache *cache, hwaddr addr, uint64_t val);
  */
 IOMMUTLBEntry address_space_get_iotlb_entry(AddressSpace *as, hwaddr addr,
                                             bool is_write);
+/* iotlb_target_as_exist: check if target_as exists for the 'addr'.
+ * If not exists, there is no iotlb entry for the address.
+ */
+bool iotlb_target_as_exist (CPUState *cpu, int asidx, hwaddr addr, MemTxAttrs *attr);
 
 /* address_space_translate: translate an address range into an address space
  * into a MemoryRegion and an address range into that section.  Should be

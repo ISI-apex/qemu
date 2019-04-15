@@ -16,10 +16,10 @@
 #include "exec/semihost.h"
 #include "sysemu/kvm.h"
 #include "hw/arm/arm-system-counter.h"
+#include "exec/memory.h"
 
 #define ARM_CPU_FREQ 1000000000 /* FIXME: 1 GHz, should be configurable */
 
-#define HPSC_M4F
 #ifdef HPSC
 #define HPSC_ARM_CP_STATE_BOTH ARM_CP_STATE_AA64
 #else
@@ -7652,7 +7652,6 @@ static void v7m_push_stack(ARMCPU *cpu)
         env->regs[13] -= 4;
         xpsr |= XPSR_SPREALIGN;
     }
-#ifdef HPSC_M4F
     if (arm_current_el(env) == 1) { /* thread mode */
       env->vfp.fpccr |= (1 << 3);
       env->vfp.fpccr &= ~(1 << 1);
@@ -7683,7 +7682,6 @@ static void v7m_push_stack(ARMCPU *cpu)
         v7m_push(env, (env->vfp.regs[1>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[0>>1] & 0xffffffff);
     }
-#endif
     /* Switch to the handler mode.  */
     v7m_push(env, xpsr);
     v7m_push(env, env->regs[15]);
@@ -7974,7 +7972,6 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
 
         /* Commit to consuming the stack frame */
         frameptr += 0x20;
-#ifdef HPSC_M4F
         if (arm_feature(env, ARM_FEATURE_VFP)) {
             env->vfp.regs[0>>1]  = ldl_phys(cs->as, frameptr+0x04);
             env->vfp.regs[0>>1]  <<= 32;
@@ -8003,7 +8000,6 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
             vfp_set_fpscr(env, ldl_phys(cs->as, frameptr+0x40));
             frameptr += 0x48;
         }
-#endif
         /* Undo stack alignment (the SPREALIGN bit indicates that the original
          * pre-exception SP was not 8-aligned and we added a padding word to
          * align it, so we undo this by ORing in the bit that increases it
@@ -11164,6 +11160,19 @@ bool arm_tlb_fill(CPUState *cs, vaddr address,
     ret = get_phys_addr(env, address, access_type,
                         core_to_arm_mmu_idx(env, mmu_idx), &phys_addr,
                         &attrs, &prot, &page_size, fsr, fi, NULL);
+#ifdef HPSC
+    if (!ret) {
+        /* check if the address is accessible natively and through MMU */
+        if (arm_feature(env, ARM_FEATURE_V7) &&
+           !arm_feature(env, ARM_FEATURE_V8) &&
+           (regime_translation_disabled(env, core_to_arm_mmu_idx(env, mmu_idx)) ||
+            m_is_ppb_region(env, address))) {
+            if (!iotlb_exist(cs, address, attrs)) {
+                ret = 1;
+            }
+        }
+    }
+#endif
     if (!ret) {
         /* Map a single [sub]page.  */
         phys_addr &= TARGET_PAGE_MASK;

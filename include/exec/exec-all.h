@@ -203,6 +203,15 @@ void tlb_flush_by_mmuidx(CPUState *cpu, uint16_t idxmap);
  * Flush all entries from all TLBs of all CPUs, for the specified
  * MMU indexes.
  */
+bool iotlb_exist(CPUState *cpu, hwaddr paddr, MemTxAttrs attrs);
+/**
+ * iotlb_exist:
+ * @cpu: Originating CPU of the flush
+ * @paddr: physical address of the page
+ * @attrs: memory transaction attributes
+ *
+ * Check if the paddr is in iotlb.
+ **/
 void tlb_flush_by_mmuidx_all_cpus(CPUState *cpu, uint16_t idxmap);
 /**
  * tlb_flush_by_mmuidx_all_cpus_synced:
