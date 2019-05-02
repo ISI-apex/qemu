@@ -80,7 +80,8 @@ struct NANDFlashState {
 
     uint8_t manf_id, chip_id;
     uint8_t buswidth; /* in BYTES */
-    int size, pages;
+    uint64_t size;
+    int  pages;
     int page_shift, oob_shift, erase_shift, addr_shift;
     uint8_t *storage;
     BlockBackend *blk;
@@ -164,7 +165,7 @@ static void mem_and(uint8_t *dest, const uint8_t *src, size_t n)
 
 /* Information based on Linux drivers/mtd/nand/nand_ids.c */
 static const struct {
-    int size;
+    uint64_t size;
     int width;
     int page_shift;
     int erase_shift;
@@ -374,10 +375,34 @@ static const struct {
     [0xc5] = { 2048,	16,	0, 0, LP_OPTIONS16 },
 
     /* 32 Gigabit : from Linux */
-    [0xa7] = { 2048,	8,	0, 0, LP_OPTIONS },
-    [0xd7] = { 2048,	8,	0, 0, LP_OPTIONS },
-    [0xb7] = { 2048,	16,	0, 0, LP_OPTIONS16 },
-    [0xc7] = { 2048,	16,	0, 0, LP_OPTIONS16 },
+    [0xa7] = { 4096,	8,	0, 0, LP_OPTIONS },
+    [0xd7] = { 4096,	8,	0, 0, LP_OPTIONS },
+    [0xb7] = { 4096,	16,	0, 0, LP_OPTIONS16 },
+    [0xc7] = { 4096,	16,	0, 0, LP_OPTIONS16 },
+
+    /* 64 Gigabit : from Linux */
+    [0xae] = { 8192,	8,	0, 0, LP_OPTIONS },
+    [0xde] = { 8192,	8,	0, 0, LP_OPTIONS },
+    [0xbe] = { 8192,	16,	0, 0, LP_OPTIONS16 },
+    [0xce] = { 8192,	16,	0, 0, LP_OPTIONS16 },
+
+    /* 128 Gigabit : from Linux */
+    [0x1a] = { 16384,	8,	0, 0, LP_OPTIONS },
+    [0x3a] = { 16384,	8,	0, 0, LP_OPTIONS },
+    [0x2a] = { 16384,	16,	0, 0, LP_OPTIONS16 },
+    [0x4a] = { 16384,	16,	0, 0, LP_OPTIONS16 },
+
+    /* 256 Gigabit : from Linux */
+    [0x1c] = { 32768,	8,	0, 0, LP_OPTIONS },
+    [0x3c] = { 32768,	8,	0, 0, LP_OPTIONS },
+    [0x2c] = { 32768,	16,	0, 0, LP_OPTIONS16 },
+    [0x4c] = { 32768,	16,	0, 0, LP_OPTIONS16 },
+
+    /* 512 Gigabit : from Linux */
+    [0x1e] = { 65536,	8,	0, 0, LP_OPTIONS },
+    [0x3e] = { 65536,	8,	0, 0, LP_OPTIONS },
+    [0x2e] = { 65536,	16,	0, 0, LP_OPTIONS16 },
+    [0x4e] = { 65536,	16,	0, 0, LP_OPTIONS16 },
 };
 
 static void nand_reset(DeviceState *dev)

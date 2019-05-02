@@ -382,8 +382,12 @@ static MemTxResult gicd_readl(GICv3State *s, hwaddr offset,
         /* old code */
         *data = (1 << 25) | (1 << 24) | (s->security_extn << 10) |
             (0xf << 19) | itlinesnumber;
-        /* new code based on the value in the device tree */
-        *data = s->gicd_typer | itlinesnumber;
+        /* new code based on the 'gicd_typer' value in the device tree */
+        if (s->gicd_typer) {
+            *data = s->gicd_typer;
+            if ((s->gicd_typer & 0x1f) < itlinesnumber)
+                *data = (s->gicd_typer & ~(0x1f)) | itlinesnumber;
+        }
         return MEMTX_OK;
     }
     case GICD_IIDR:

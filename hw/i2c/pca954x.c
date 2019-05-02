@@ -156,7 +156,6 @@ static int pca954x_decode_address(I2CSlave *i2c, uint8_t address)
 
     s->control_decoded = address ==
                     (PCA954X_CONTROL_ADDR | (s->chip_enable & 0x7));
-
     if (s->control_decoded) {
         return 0;
     }

@@ -16,10 +16,10 @@
 #include "exec/semihost.h"
 #include "sysemu/kvm.h"
 #include "hw/arm/arm-system-counter.h"
+#include "exec/memory.h"
 
 #define ARM_CPU_FREQ 1000000000 /* FIXME: 1 GHz, should be configurable */
 
-#define HPSC_M4F
 #ifdef HPSC
 #define HPSC_ARM_CP_STATE_BOTH ARM_CP_STATE_AA64
 #else
@@ -7652,7 +7652,6 @@ static void v7m_push_stack(ARMCPU *cpu)
         env->regs[13] -= 4;
         xpsr |= XPSR_SPREALIGN;
     }
-#ifdef HPSC_M4F
     if (arm_current_el(env) == 1) { /* thread mode */
       env->vfp.fpccr |= (1 << 3);
       env->vfp.fpccr &= ~(1 << 1);
@@ -7683,7 +7682,6 @@ static void v7m_push_stack(ARMCPU *cpu)
         v7m_push(env, (env->vfp.regs[1>>1] >> 32) & 0xffffffff);
         v7m_push(env, env->vfp.regs[0>>1] & 0xffffffff);
     }
-#endif
     /* Switch to the handler mode.  */
     v7m_push(env, xpsr);
     v7m_push(env, env->regs[15]);
@@ -7974,7 +7972,6 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
 
         /* Commit to consuming the stack frame */
         frameptr += 0x20;
-#ifdef HPSC_M4F
         if (arm_feature(env, ARM_FEATURE_VFP)) {
             env->vfp.regs[0>>1]  = ldl_phys(cs->as, frameptr+0x04);
             env->vfp.regs[0>>1]  <<= 32;
@@ -8003,7 +8000,6 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
             vfp_set_fpscr(env, ldl_phys(cs->as, frameptr+0x40));
             frameptr += 0x48;
         }
-#endif
         /* Undo stack alignment (the SPREALIGN bit indicates that the original
          * pre-exception SP was not 8-aligned and we added a padding word to
          * align it, so we undo this by ORing in the bit that increases it
@@ -8114,7 +8110,7 @@ static bool do_v7m_function_return(ARMCPU *cpu)
     return true;
 }
 
-static void arm_log_exception(int idx)
+static void arm_log_exception(int idx, char * id)
 {
     if (qemu_loglevel_mask(CPU_LOG_INT)) {
         const char *exc = NULL;
@@ -8144,7 +8140,7 @@ static void arm_log_exception(int idx)
         if (!exc) {
             exc = "unknown";
         }
-        qemu_log_mask(CPU_LOG_INT, "Taking exception %d [%s]\n", idx, exc);
+        qemu_log_mask(CPU_LOG_INT, "(%s): Taking exception %d [%s]\n", id, idx, exc);
     }
 }
 
@@ -8274,7 +8270,7 @@ void arm_v7m_cpu_do_interrupt(CPUState *cs)
     CPUARMState *env = &cpu->env;
     uint32_t lr;
 
-    arm_log_exception(cs->exception_index);
+    arm_log_exception(cs->exception_index, cs->parent_obj.id);
 
     /* For exceptions we just mark as pending on the NVIC, and let that
        handle it.  */
@@ -9014,7 +9010,7 @@ void arm_cpu_do_interrupt(CPUState *cs)
 
     assert(!arm_feature(env, ARM_FEATURE_M));
 
-    arm_log_exception(cs->exception_index);
+    arm_log_exception(cs->exception_index, cs->parent_obj.id);
     qemu_log_mask(CPU_LOG_INT, "...from EL%d to EL%d\n", arm_current_el(env),
                   new_el);
     if (qemu_loglevel_mask(CPU_LOG_INT)
@@ -11164,6 +11160,19 @@ bool arm_tlb_fill(CPUState *cs, vaddr address,
     ret = get_phys_addr(env, address, access_type,
                         core_to_arm_mmu_idx(env, mmu_idx), &phys_addr,
                         &attrs, &prot, &page_size, fsr, fi, NULL);
+#ifdef HPSC
+    if (!ret) {
+        /* check if the address is accessible natively and through MMU */
+        if (arm_feature(env, ARM_FEATURE_V7) &&
+           !arm_feature(env, ARM_FEATURE_V8) &&
+           (regime_translation_disabled(env, core_to_arm_mmu_idx(env, mmu_idx)) ||
+            m_is_ppb_region(env, address))) {
+            if (!iotlb_exist(cs, address, attrs)) {
+                ret = 1;
+            }
+        }
+    }
+#endif
     if (!ret) {
         /* Map a single [sub]page.  */
         phys_addr &= TARGET_PAGE_MASK;

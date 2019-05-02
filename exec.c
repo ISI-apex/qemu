@@ -551,6 +551,39 @@ translate_fail:
     return (MemoryRegionSection) { .mr = &io_mem_unassigned };
 }
 
+bool iotlb_target_as_exist (CPUState *cpu, int asidx, hwaddr addr,
+                                  MemTxAttrs *attr)
+{
+    MemoryRegionSection *section;
+    IOMMUMemoryRegion *iommu_mr;
+    IOMMUMemoryRegionClass *imrc;
+    AddressSpace *as = cpu->cpu_ases[asidx].as;
+    IOMMUTLBEntry iotlb;
+    hwaddr plen;
+
+    for (;;) {
+        FlatView *fv = address_space_to_flatview(as);
+        AddressSpaceDispatch *d = flatview_to_dispatch(fv);
+        section = address_space_translate_internal(d, addr, &addr, &plen, false);
+        iommu_mr = memory_region_get_iommu(section->mr);
+        if (!iommu_mr) {
+            break;
+        }
+        imrc = memory_region_get_iommu_class_nocheck(iommu_mr);
+
+        if (imrc->translate_attr) {
+            iotlb = imrc->translate_attr(iommu_mr, addr, false, attr);
+        } else {
+            iotlb = imrc->translate(iommu_mr, addr, false);
+        }
+        addr = ((iotlb.translated_addr & ~iotlb.addr_mask)
+                | (addr & iotlb.addr_mask));
+        as = iotlb.target_as;
+        if (!as) return false;
+    }
+    return true;
+}
+
 /* Called from RCU critical section */
 IOMMUTLBEntry address_space_get_iotlb_entry(AddressSpace *as, hwaddr addr,
                                             bool is_write)

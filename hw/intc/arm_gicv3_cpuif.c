@@ -2895,6 +2895,11 @@ void gicv3_init_cpuif(GICv3State *s)
 #ifdef HPSC
         ARMCPU *cpu = ARM_CPU(qemu_get_cpu(s->cpu_start_id + i));
         GICv3CPUState *cs = &s->cpu[i];
+
+        /* fixup for GICR_TYPER of R52 */
+        if (arm_feature(&cpu->env, ARM_FEATURE_V8R)) {
+            s->cpu[i].gicr_typer &= ~(1 << 24);
+        }
 #else
         ARMCPU *cpu = ARM_CPU(qemu_get_cpu(i));
         GICv3CPUState *cs = &s->cpu[i];

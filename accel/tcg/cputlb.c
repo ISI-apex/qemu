@@ -603,7 +603,20 @@ static void tlb_add_large_page(CPUArchState *env, target_ulong vaddr,
     env->tlb_flush_addr &= mask;
     env->tlb_flush_mask = mask;
 }
+/* Check if the iotlb entry exists of the paddr.
+ * returns true  if exists,
+ *         false if it doesn't exist.
+ */
+bool iotlb_exist(CPUState *cpu, hwaddr paddr, MemTxAttrs attrs)
+{
+    CPUArchState *env = cpu->env_ptr;
+    int asidx = cpu_asidx_from_attrs(cpu, attrs);
+    CPUIOTLBEntry *attr = &env->memattr[attrs.secure];
 
+    assert_cpu_is_self(cpu);
+
+    return iotlb_target_as_exist(cpu, asidx, paddr, &attr->attrs);
+}
 /* Add a new TLB entry. At most one entry for a given virtual address
  * is permitted. Only a single TARGET_PAGE_SIZE region is mapped, the
  * supplied size is only used by tlb_flush_page.
