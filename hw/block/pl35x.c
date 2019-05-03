@@ -150,10 +150,9 @@ static void pl35x_ecc_save(PL35xItf *s) {
         int ecc1_block_idx = 0x418 + (i << 2);
         ps->regs[ecc1_block_idx >> 2] = r32;
     }
-    DB_PRINT("@0x418 = 0x%08x, @0x41c = 0x%08x, @0x420 = 0x%08x, @0x424 = 0x%08x\n",
+    DB_PRINT("ECC: @0x418 = 0x%08x, @0x41c = 0x%08x, @0x420 = 0x%08x, @0x424 = 0x%08x\n",
        ps->regs[0x418 >>2], ps->regs[0x41c >>2], ps->regs[0x420 >>2], ps->regs[0x424 >>2]);
 }
-
 
 static void pl35x_ecc_digest(PL35xItf *s, uint8_t data)
 {
@@ -324,10 +323,15 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
     int i;
     int shift = 0;
     uint32_t r = 0;
+    bool data_phase;
+    uint16_t end_cmd;
 
     /* No nand device present */
     if (s->dev == NULL) 
         return 0x0;
+
+    data_phase = (addr >> 19) & 1;
+    end_cmd = (addr >> 11) & 0xff;
 
     int page_size = nand_page_size(s->dev);
     int nand_remain_data = nand_iolen(s->dev);
@@ -345,21 +349,23 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
         r |= r8 << shift;
         shift += 8;
     }
-    if (s->r_new_ecc) {
-        DB_PRINT("New ECC starts\n");
-        pl35x_ecc_init(s);
-        s->ecc_r_data_size = 0;
-        s->r_new_ecc = false;
-        s->buf_count = 0;
-    } 
-    s->ecc_r_data_size += size;
-    for (i = 0; i < size; i++) {
-        s->buff[s->buf_count++] = (uint8_t) (r >> (i * 8) & 0xff);
-        pl35x_ecc_digest(s, (uint8_t) (r >> (i * 8) & 0xff));
-    }
-    if (s->ecc_r_data_size == page_size) {	// assume PAGE_SIZE = 2048
-        /* save ecc value to the registers */
-        pl35x_ecc_save(s);
+    if (data_phase && end_cmd != 0) {
+        if (s->r_new_ecc) {
+            pl35x_ecc_init(s);
+            s->ecc_r_data_size = 0;
+            s->r_new_ecc = false;
+            s->buf_count = 0;
+        } 
+        s->ecc_r_data_size += size;
+        for (i = 0; i < size; i++) {
+            s->buff[s->buf_count++] = (uint8_t) (r >> (i * 8) & 0xff);
+            pl35x_ecc_digest(s, (uint8_t) (r >> (i * 8) & 0xff));
+        }
+        if (s->ecc_r_data_size == page_size) {	// assume PAGE_SIZE = 2048
+            /* save ecc value to the registers */
+            pl35x_ecc_save(s);
+	    s->r_new_ecc = true;
+        }
     }
     return r;
 }
@@ -454,10 +460,10 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     }
     /* Writing commands. One or two (Start and End).  */
     if (ecmd_valid && !s->nand_pending_addr_cycles) {
-    DB_PRINT("writing commands. One or two (Start and End)\n");
+	s->r_new_ecc = true;
+        DB_PRINT("writing commands. One or two (Start and End)\n");
         nand_setpins(s->dev, 1, 0, 0, 1, 0);
         nand_setio(s->dev, end_cmd);
-	s->r_new_ecc = true;
     }
 }
 
@@ -514,6 +520,7 @@ static void pl35x_reset(DeviceState *dev)
         s->itf[1].ecc_w_data_size = 0;
         s->itf[1].r_new_ecc = false;
         s->itf[1].w_new_ecc = false;
+        pl35x_ecc_init(&s->itf[1]);
     }
 }
 
