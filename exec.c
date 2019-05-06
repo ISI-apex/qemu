@@ -3317,6 +3317,13 @@ void cpu_physical_memory_rw(hwaddr addr, uint8_t *buf,
                      buf, len, is_write);
 }
 
+void cpu_physical_memory_rw_cpu(CPUState *cpu, hwaddr addr, uint8_t *buf,
+                            int len, int is_write)
+{
+    address_space_rw(cpu->as, addr, MEMTXATTRS_UNSPECIFIED,
+                     buf, len, is_write);
+}
+
 enum write_rom_type {
     WRITE_DATA,
     FLUSH_CACHE,
