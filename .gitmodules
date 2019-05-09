@@ -1,42 +1,42 @@
 [submodule "roms/vgabios"]
 	path = roms/vgabios
-	url = git://git.qemu-project.org/vgabios.git/
+	url = /projects/boeing/isi/hpsc/sdk/qemu/vgabios
 [submodule "roms/seabios"]
 	path = roms/seabios
-	url = git://git.qemu-project.org/seabios.git/
+	url = /projects/boeing/isi/hpsc/sdk/qemu/seabios
 [submodule "roms/SLOF"]
 	path = roms/SLOF
-	url = git://git.qemu-project.org/SLOF.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/SLOF
 [submodule "roms/ipxe"]
 	path = roms/ipxe
-	url = git://git.qemu-project.org/ipxe.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/ipxe
 [submodule "roms/openbios"]
 	path = roms/openbios
-	url = git://git.qemu-project.org/openbios.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/openbios
 [submodule "roms/openhackware"]
 	path = roms/openhackware
-	url = git://git.qemu-project.org/openhackware.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/openhackware
 [submodule "roms/qemu-palcode"]
 	path = roms/qemu-palcode
-	url = git://github.com/rth7680/qemu-palcode.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/qemu-palcode
 [submodule "roms/sgabios"]
 	path = roms/sgabios
-	url = git://git.qemu-project.org/sgabios.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/sgabios
 [submodule "dtc"]
 	path = dtc
-	url = git://git.qemu-project.org/dtc.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/dtc
 [submodule "roms/u-boot"]
 	path = roms/u-boot
-	url = git://git.qemu-project.org/u-boot.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/u-boot
 [submodule "roms/skiboot"]
 	path = roms/skiboot
-	url = git://git.qemu.org/skiboot.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/skiboot
 [submodule "roms/QemuMacDrivers"]
 	path = roms/QemuMacDrivers
-	url = git://git.qemu.org/QemuMacDrivers.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/QemuMacDrivers
 [submodule "ui/keycodemapdb"]
 	path = ui/keycodemapdb
-	url = git://git.qemu.org/keycodemapdb.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/keycodemapdb
 [submodule "capstone"]
 	path = capstone
-	url = git://git.qemu.org/capstone.git
+	url = /projects/boeing/isi/hpsc/sdk/qemu/capstone
