@@ -1,42 +1,42 @@
 [submodule "roms/vgabios"]
 	path = roms/vgabios
-	url = /projects/boeing/isi/hpsc/sdk/qemu/vgabios
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/vgabios
 [submodule "roms/seabios"]
 	path = roms/seabios
-	url = /projects/boeing/isi/hpsc/sdk/qemu/seabios
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/seabios
 [submodule "roms/SLOF"]
 	path = roms/SLOF
-	url = /projects/boeing/isi/hpsc/sdk/qemu/SLOF
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/SLOF
 [submodule "roms/ipxe"]
 	path = roms/ipxe
-	url = /projects/boeing/isi/hpsc/sdk/qemu/ipxe
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/ipxe
 [submodule "roms/openbios"]
 	path = roms/openbios
-	url = /projects/boeing/isi/hpsc/sdk/qemu/openbios
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/openbios
 [submodule "roms/openhackware"]
 	path = roms/openhackware
-	url = /projects/boeing/isi/hpsc/sdk/qemu/openhackware
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/openhackware
 [submodule "roms/qemu-palcode"]
 	path = roms/qemu-palcode
-	url = /projects/boeing/isi/hpsc/sdk/qemu/qemu-palcode
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/qemu-palcode
 [submodule "roms/sgabios"]
 	path = roms/sgabios
-	url = /projects/boeing/isi/hpsc/sdk/qemu/sgabios
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/sgabios
 [submodule "dtc"]
 	path = dtc
 	url = /projects/boeing/isi/hpsc/sdk/qemu/dtc
 [submodule "roms/u-boot"]
 	path = roms/u-boot
-	url = /projects/boeing/isi/hpsc/sdk/qemu/u-boot
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/u-boot
 [submodule "roms/skiboot"]
 	path = roms/skiboot
-	url = /projects/boeing/isi/hpsc/sdk/qemu/skiboot
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/skiboot
 [submodule "roms/QemuMacDrivers"]
 	path = roms/QemuMacDrivers
-	url = /projects/boeing/isi/hpsc/sdk/qemu/QemuMacDrivers
+	url = /projects/boeing/isi/hpsc/sdk/qemu/roms/QemuMacDrivers
 [submodule "ui/keycodemapdb"]
 	path = ui/keycodemapdb
-	url = /projects/boeing/isi/hpsc/sdk/qemu/keycodemapdb
+	url = /projects/boeing/isi/hpsc/sdk/qemu/ui/keycodemapdb
 [submodule "capstone"]
 	path = capstone
 	url = /projects/boeing/isi/hpsc/sdk/qemu/capstone
