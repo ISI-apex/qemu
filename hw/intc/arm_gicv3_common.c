@@ -345,7 +345,7 @@ static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
     s->cpu = g_new0(GICv3CPUState, s->num_cpu);
 
     for (i = 0; i < s->num_cpu; i++) {
-        CPUState *cpu = qemu_get_cpu(i);
+        CPUState *cpu = qemu_get_cpu(s->cpu_start_id + i);
         uint64_t cpu_affid;
         int last;
 
@@ -494,6 +494,7 @@ static Property arm_gicv3_common_properties[] = {
     DEFINE_PROP_BOOL("has-security-extensions", GICv3State, security_extn, 0),
     DEFINE_PROP_ARRAY("redist-region-count", GICv3State, nb_redist_regions,
                       redist_region_count, qdev_prop_uint32, uint32_t),
+    DEFINE_PROP_UINT32("cpu-start-id", GICv3State, cpu_start_id, 0),
     DEFINE_PROP_UINT32("gicd-typer", GICv3State, gicd_typer, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
