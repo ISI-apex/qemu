@@ -84,15 +84,16 @@ int main(int argc, char *argv[])
     bool page_empty = false;
     bool Image_wip = true;
     int nand_flash;
+    int generate_empty_image;
 
     const char *exe_name = argv[0];
     argc--;
     argv++;
 
-    if (argc != 5) {
+    if (argc != 6) {
         fprintf(stderr, "Usage: %s <page size> <oob size> " \
                 "<num of pages per block> <num_blocks> "\
-                "<ecc size>\n", exe_name);
+                "<ecc size> <1: empty image, 0: stdin>\n", exe_name);
         return 1;
     }
 
@@ -112,6 +113,8 @@ int main(int argc, char *argv[])
     num_of_blocks = strtol(argv[3], NULL, 0);
     ecc_size = strtol(argv[4], NULL, 0);
     ecc_data = (uint8_t *)malloc(ecc_size);
+    generate_empty_image = atoi(argv[5]);
+    if (generate_empty_image) Image_done = true;
 
     uint8_t *oob_buf = (uint8_t *)malloc(oob_size);
     memset(oob_buf, 0xFF, oob_size);
@@ -202,6 +205,23 @@ int main(int argc, char *argv[])
         } else {
             /* Empty Page */
             page_empty = true;
+            ecc_pos = 0;
+            memset(ecc_data, 0xFF, ecc_size);
+            DPRINT("Empty Block %d\n", block);
+            memset(&buf[0], 0xff, page_size);
+            ecc_digest(&buf[0], ecc_data, page_size, page_size);
+            memcpy(&oob_buf[oob_size - ecc_size], ecc_data, ecc_size);
+#ifdef DEBUG
+	    /* ECC debug Logging */
+	    DPRINT("\tECC pos %d\nECC Digest:\n", ecc_pos);
+	    for (j = oob_size - ecc_size; j < oob_size; j++) {
+		DPRINT("%d:%x ", j, oob_buf[j]);
+		if (!(j % 5)) {
+		    DPRINT("\n");
+		}
+	    }
+	    DPRINT("\n");
+#endif /* DEBUG */
         }
 
         for (i = 0; i < page_size; ++i) {
@@ -209,7 +229,7 @@ int main(int argc, char *argv[])
             if (page_empty == false) {
                 bytes_written = write(nand_flash, &buf[i], page_size - i);
             } else {
-                lseek64(nand_flash, page_size - i, SEEK_CUR);
+                bytes_written = write(nand_flash, &buf[i], page_size - i);
                 bytes_written = page_size;
             }
 
@@ -285,4 +305,18 @@ static void ecc_digest(uint8_t *data , uint8_t * oob,
         }
         head++;
     }
+#ifdef DEBUG
+   DPRINT("--- data ---");
+   for (int i = 0; i < bytes_read; i++) {
+     if (i % 16 == 0) {
+        DPRINT("\n0x%06x: ", i);
+     }
+     DPRINT("0x%02x ", data[i]);
+   }
+   DPRINT("\n--- ECC --- \n");
+   for (int i = 0; i < 4*ecc_bytes_per_subpage; i++) {
+     DPRINT("0x%02x ", oob[i]);
+   }
+   DPRINT("\n\n");
+#endif /* DEBUG */
 }
