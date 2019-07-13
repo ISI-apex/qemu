@@ -1,0 +1,2 @@
+# TODO: factor generic RIO from Praesum devices */
+obj-$(CONFIG_PRAESUM_RIO) += brc1-rio-endpt.o sm-rio-switch.o packet.o rio-dev.o
