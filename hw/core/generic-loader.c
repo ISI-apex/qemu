@@ -65,8 +65,6 @@ static void generic_loader_realize(DeviceState *dev, Error **errp)
     int big_endian;
     int size = 0;
 
-    s->set_pc = false;
-
     /* Perform some error checking on the user's options */
     if (s->data || s->data_len  || s->data_be) {
         /* User is loading memory values */
@@ -93,12 +91,6 @@ static void generic_loader_realize(DeviceState *dev, Error **errp)
                        "image");
             return;
         }
-        /* The user specified a file, only set the PC if they also specified
-         * a CPU to use.
-         */
-        if (s->cpu_num != CPU_NONE) {
-            s->set_pc = true;
-        }
     } else if (s->addr) {
         /* User is setting the PC */
         if (s->data || s->data_len || s->data_be) {
@@ -110,7 +102,6 @@ static void generic_loader_realize(DeviceState *dev, Error **errp)
                        "program counter");
             return;
         }
-        s->set_pc = true;
     } else {
         /* Did the user specify anything? */
         error_setg(errp, "please include valid arguments");
@@ -183,6 +174,7 @@ static Property generic_loader_props[] = {
     DEFINE_PROP_UINT32("cpu-num", GenericLoaderState, cpu_num, CPU_NONE),
     DEFINE_PROP_BOOL("force-raw", GenericLoaderState, force_raw, false),
     DEFINE_PROP_STRING("file", GenericLoaderState, file),
+    DEFINE_PROP_BOOL("set-pc", GenericLoaderState, set_pc, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 
