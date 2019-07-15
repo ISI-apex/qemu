@@ -138,6 +138,8 @@ tags
 TAGS
 docker-src.*
 *~
+.*.swp
+.*.swo
 *.ast_raw
 *.depend_raw
 trace.h
