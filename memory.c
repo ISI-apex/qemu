@@ -430,6 +430,38 @@ static int get_cpu_index(void)
     return -1;
 }
 
+static void do_trace_read_access(MemoryRegion *mr, hwaddr addr,
+                                 uint64_t value, unsigned size)
+{
+    if (mr->subpage) {
+        trace_memory_region_subpage_read(get_cpu_index(), mr, addr, value, size);
+    } else if (mr == &io_mem_notdirty) {
+        /* Accesses to code which has previously been translated into a TB show
+         * up in the MMIO path, as accesses to the io_mem_notdirty
+         * MemoryRegion. */
+        trace_memory_region_tb_read(get_cpu_index(), addr, value, size);
+    } else if (TRACE_MEMORY_REGION_OPS_READ_ENABLED) {
+        hwaddr abs_addr = memory_region_to_absolute_addr(mr, addr);
+        trace_memory_region_ops_read(get_cpu_index(), mr, abs_addr, value, size);
+    }
+}
+
+static void do_trace_write_access(MemoryRegion *mr, hwaddr addr,
+                                  uint64_t value, unsigned size)
+{
+    if (mr->subpage) {
+        trace_memory_region_subpage_write(get_cpu_index(), mr, addr, value, size);
+    } else if (mr == &io_mem_notdirty) {
+        /* Accesses to code which has previously been translated into a TB show
+         * up in the MMIO path, as accesses to the io_mem_notdirty
+         * MemoryRegion. */
+        trace_memory_region_tb_write(get_cpu_index(), addr, value, size);
+    } else if (TRACE_MEMORY_REGION_OPS_WRITE_ENABLED) {
+        hwaddr abs_addr = memory_region_to_absolute_addr(mr, addr);
+        trace_memory_region_ops_write(get_cpu_index(), mr, abs_addr, value, size);
+    }
+}
+
 static MemTxResult  memory_region_read_accessor(MemoryRegion *mr,
                                                 hwaddr addr,
                                                 uint64_t *value,
@@ -438,48 +470,38 @@ static MemTxResult  memory_region_read_accessor(MemoryRegion *mr,
                                                 uint64_t mask,
                                                 MemTxAttrs attrs)
 {
+    MemTxResult r = MEMTX_OK;
     uint64_t tmp;
 
-    tmp = mr->ops->read(mr->opaque, addr, size);
-    if (mr->subpage) {
-        trace_memory_region_subpage_read(get_cpu_index(), mr, addr, tmp, size);
-    } else if (mr == &io_mem_notdirty) {
-        /* Accesses to code which has previously been translated into a TB show
-         * up in the MMIO path, as accesses to the io_mem_notdirty
-         * MemoryRegion. */
-        trace_memory_region_tb_read(get_cpu_index(), addr, tmp, size);
-    } else if (TRACE_MEMORY_REGION_OPS_READ_ENABLED) {
-        hwaddr abs_addr = memory_region_to_absolute_addr(mr, addr);
-        trace_memory_region_ops_read(get_cpu_index(), mr, abs_addr, tmp, size);
+    if (mr->ops->read_with_attrs) {
+        r = mr->ops->read_with_attrs(mr->opaque, addr, &tmp, size, attrs);
+    } else if (mr->ops->read) {
+        tmp = mr->ops->read(mr->opaque, addr, size);
+    } else if (mr->ops->readb_with_attrs) {
+        r = mr->ops->readb_with_attrs(mr->opaque, addr, (uint8_t *)&tmp, size, attrs);
+        adjust_endianness(mr, &tmp, size);
+    } else {
+        abort();
     }
+    do_trace_read_access(mr, addr, tmp, size);
     memory_region_shift_read_access(value, shift, mask, tmp);
-    return MEMTX_OK;
+    return r;
 }
 
-static MemTxResult memory_region_read_with_attrs_accessor(MemoryRegion *mr,
-                                                          hwaddr addr,
-                                                          uint64_t *value,
-                                                          unsigned size,
-                                                          signed shift,
-                                                          uint64_t mask,
-                                                          MemTxAttrs attrs)
+static MemTxResult memory_region_readb_accessor(MemoryRegion *mr,
+                                                hwaddr addr,
+                                                uint8_t *data,
+                                                unsigned size,
+                                                MemTxAttrs attrs)
 {
-    uint64_t tmp = 0;
+    uint64_t tmp;
     MemTxResult r;
 
-    r = mr->ops->read_with_attrs(mr->opaque, addr, &tmp, size, attrs);
-    if (mr->subpage) {
-        trace_memory_region_subpage_read(get_cpu_index(), mr, addr, tmp, size);
-    } else if (mr == &io_mem_notdirty) {
-        /* Accesses to code which has previously been translated into a TB show
-         * up in the MMIO path, as accesses to the io_mem_notdirty
-         * MemoryRegion. */
-        trace_memory_region_tb_read(get_cpu_index(), addr, tmp, size);
-    } else if (TRACE_MEMORY_REGION_OPS_READ_ENABLED) {
-        hwaddr abs_addr = memory_region_to_absolute_addr(mr, addr);
-        trace_memory_region_ops_read(get_cpu_index(), mr, abs_addr, tmp, size);
-    }
-    memory_region_shift_read_access(value, shift, mask, tmp);
+    r = mr->ops->readb_with_attrs(mr->opaque, addr, data, size, attrs);
+
+    tmp = ldn_p(data, MIN(size, 8)); /* just to record in trace */
+    adjust_endianness(mr, &tmp, MIN(size, 8));
+    do_trace_read_access(mr, addr, tmp, size);
     return r;
 }
 
@@ -491,45 +513,34 @@ static MemTxResult memory_region_write_accessor(MemoryRegion *mr,
                                                 uint64_t mask,
                                                 MemTxAttrs attrs)
 {
+    MemTxResult r = MEMTX_OK;
     uint64_t tmp = memory_region_shift_write_access(value, shift, mask);
 
-    if (mr->subpage) {
-        trace_memory_region_subpage_write(get_cpu_index(), mr, addr, tmp, size);
-    } else if (mr == &io_mem_notdirty) {
-        /* Accesses to code which has previously been translated into a TB show
-         * up in the MMIO path, as accesses to the io_mem_notdirty
-         * MemoryRegion. */
-        trace_memory_region_tb_write(get_cpu_index(), addr, tmp, size);
-    } else if (TRACE_MEMORY_REGION_OPS_WRITE_ENABLED) {
-        hwaddr abs_addr = memory_region_to_absolute_addr(mr, addr);
-        trace_memory_region_ops_write(get_cpu_index(), mr, abs_addr, tmp, size);
+    do_trace_write_access(mr, addr, tmp, size);
+
+    if (mr->ops->write_with_attrs) {
+        r = mr->ops->write_with_attrs(mr->opaque, addr, tmp, size, attrs);
+    } else if (mr->ops->write) {
+        mr->ops->write(mr->opaque, addr, tmp, size);
+    } else if (mr->ops->writeb_with_attrs) {
+        adjust_endianness(mr, &tmp, size);
+        r = mr->ops->writeb_with_attrs(mr->opaque, addr, (uint8_t *)&tmp, size, attrs);
+    } else {
+        abort();
     }
-    mr->ops->write(mr->opaque, addr, tmp, size);
-    return MEMTX_OK;
+    return r;
 }
 
-static MemTxResult memory_region_write_with_attrs_accessor(MemoryRegion *mr,
-                                                           hwaddr addr,
-                                                           uint64_t *value,
-                                                           unsigned size,
-                                                           signed shift,
-                                                           uint64_t mask,
-                                                           MemTxAttrs attrs)
+static MemTxResult memory_region_writeb_accessor(MemoryRegion *mr,
+                                                 hwaddr addr,
+                                                 const uint8_t *data,
+                                                 unsigned size,
+                                                 MemTxAttrs attrs)
 {
-    uint64_t tmp = memory_region_shift_write_access(value, shift, mask);
-
-    if (mr->subpage) {
-        trace_memory_region_subpage_write(get_cpu_index(), mr, addr, tmp, size);
-    } else if (mr == &io_mem_notdirty) {
-        /* Accesses to code which has previously been translated into a TB show
-         * up in the MMIO path, as accesses to the io_mem_notdirty
-         * MemoryRegion. */
-        trace_memory_region_tb_write(get_cpu_index(), addr, tmp, size);
-    } else if (TRACE_MEMORY_REGION_OPS_WRITE_ENABLED) {
-        hwaddr abs_addr = memory_region_to_absolute_addr(mr, addr);
-        trace_memory_region_ops_write(get_cpu_index(), mr, abs_addr, tmp, size);
-    }
-    return mr->ops->write_with_attrs(mr->opaque, addr, tmp, size, attrs);
+    uint64_t tmp = ldn_p(data, MIN(size, 8)); /* just to record in trace */
+    adjust_endianness(mr, &tmp, MIN(size, 8));
+    do_trace_write_access(mr, addr, tmp, size);
+    return mr->ops->writeb_with_attrs(mr->opaque, addr, data, size, attrs);
 }
 
 static MemTxResult access_with_adjusted_size(hwaddr addr,
@@ -575,6 +586,21 @@ static MemTxResult access_with_adjusted_size(hwaddr addr,
         }
     }
     return r;
+}
+
+static MemTxResult adjust_access_size(unsigned size,
+                                      unsigned access_size_min,
+                                      unsigned access_size_max)
+{
+    if (!access_size_min) {
+        access_size_min = 1;
+    }
+    if (!access_size_max) {
+        access_size_max = 4;
+    }
+
+    /* FIXME: support unaligned access? */
+    return MAX(MIN(size, access_size_max), access_size_min);
 }
 
 static AddressSpace *memory_region_to_address_space(MemoryRegion *mr)
@@ -1493,8 +1519,10 @@ static void unassigned_mem_write(void *opaque, hwaddr addr,
                                  uint64_t val, unsigned size)
 {
 #ifdef DEBUG_UNASSIGNED
-    printf("%s: Unassigned mem write " TARGET_FMT_plx " = 0x%"PRIx64"\n",
-           (current_cpu ? current_cpu->parent_obj.id : "0"), addr, val);
+    printf("%s: Unassigned mem write of size %u to "
+           TARGET_FMT_plx " <- 0x%"PRIx64" %s\n",
+           (current_cpu ? current_cpu->parent_obj.id : "0"), size, addr, val,
+           (size > 8 ? "..." : "");
 #endif
     if (current_cpu != NULL) {
         cpu_unassigned_access(current_cpu, addr, true, false, 0, size);
@@ -1616,32 +1644,6 @@ bool memory_region_access_valid(MemoryRegion *mr,
     return true;
 }
 
-static MemTxResult memory_region_dispatch_read1(MemoryRegion *mr,
-                                                hwaddr addr,
-                                                uint64_t *pval,
-                                                unsigned size,
-                                                MemTxAttrs attrs)
-{
-    *pval = 0;
-
-#if 0
-    mr->ops->access ?
-#endif
-    if (mr->ops->read) {
-        return access_with_adjusted_size(addr, pval, size,
-                                         mr->ops->impl.min_access_size,
-                                         mr->ops->impl.max_access_size,
-                                         memory_region_read_accessor,
-                                         mr, attrs);
-    } else {
-        return access_with_adjusted_size(addr, pval, size,
-                                         mr->ops->impl.min_access_size,
-                                         mr->ops->impl.max_access_size,
-                                         memory_region_read_with_attrs_accessor,
-                                         mr, attrs);
-    }
-}
-
 MemTxResult memory_region_dispatch_read(MemoryRegion *mr,
                                         hwaddr addr,
                                         uint64_t *pval,
@@ -1655,8 +1657,46 @@ MemTxResult memory_region_dispatch_read(MemoryRegion *mr,
         return MEMTX_DECODE_ERROR;
     }
 
-    r = memory_region_dispatch_read1(mr, addr, pval, size, attrs);
+    *pval = 0;
+    r = access_with_adjusted_size(addr, pval, size,
+                                  mr->ops->impl.min_access_size,
+                                  mr->ops->impl.max_access_size,
+                                  memory_region_read_accessor,
+                                  mr, attrs);
     adjust_endianness(mr, pval, size);
+    return r;
+}
+
+MemTxResult memory_region_dispatch_readb(MemoryRegion *mr,
+                                         hwaddr addr,
+                                         uint8_t *data,
+                                         unsigned size,
+                                         MemTxAttrs attrs)
+{
+    MemTxResult r = MEMTX_OK;
+    uint64_t val;
+    unsigned access_size;
+
+    if (!memory_region_access_valid(mr, addr, size, false, attrs)) {
+        unassigned_mem_read(mr, addr, size);
+        return MEMTX_DECODE_ERROR;
+    }
+
+    if (mr->ops->readb_with_attrs) {
+        access_size = adjust_access_size(size, mr->ops->impl.min_access_size,
+                                               mr->ops->impl.max_access_size);
+        r = memory_region_readb_accessor(mr, addr, data, access_size, attrs);
+    } else if (size <= 8) { /* fallback to word-based callbacks */
+        r = access_with_adjusted_size(addr, &val, size,
+                                      mr->ops->impl.min_access_size,
+                                      mr->ops->impl.max_access_size,
+                                      memory_region_read_accessor,
+                                      mr, attrs);
+        adjust_endianness(mr, &val, size);
+        stn_p(data, size, val);
+    } else { /* size >= 8 but no readb callback */
+        abort();
+    }
     return r;
 }
 
@@ -1704,20 +1744,50 @@ MemTxResult memory_region_dispatch_write(MemoryRegion *mr,
         return MEMTX_OK;
     }
 
-    if (mr->ops->write) {
-        return access_with_adjusted_size(addr, &data, size,
+    return access_with_adjusted_size(addr, &data, size,
+                                     mr->ops->impl.min_access_size,
+                                     mr->ops->impl.max_access_size,
+                                     memory_region_write_accessor, mr,
+                                     attrs);
+}
+
+MemTxResult memory_region_dispatch_writeb(MemoryRegion *mr,
+                                          hwaddr addr,
+                                          const uint8_t *data,
+                                          unsigned size,
+                                          MemTxAttrs attrs)
+{
+    MemTxResult r = MEMTX_OK;
+    uint64_t val = ldn_p(data, MIN(size, 8));
+    unsigned access_size;
+
+    if (!memory_region_access_valid(mr, addr, size, true, attrs)) {
+        unassigned_mem_write(mr, addr, val, size);
+        return MEMTX_DECODE_ERROR;
+    }
+
+    /* TODO: val is not full if size >= 8 */
+    if ((!kvm_eventfds_enabled()) &&
+        memory_region_dispatch_write_eventfds(mr, addr, val, size, attrs)) {
+        return MEMTX_OK;
+    }
+
+    if (mr->ops->writeb_with_attrs) {
+        access_size = adjust_access_size(size, mr->ops->impl.min_access_size,
+                                               mr->ops->impl.max_access_size);
+        r = memory_region_writeb_accessor(mr, addr, data, access_size, attrs);
+    } else if (size <= 8) { /* fallback to word-based callbacks */
+        val = ldn_p(data, size);
+        adjust_endianness(mr, &val, size);
+        r = access_with_adjusted_size(addr, &val, size,
                                          mr->ops->impl.min_access_size,
                                          mr->ops->impl.max_access_size,
-                                         memory_region_write_accessor, mr,
-                                         attrs);
-    } else {
-        return
-            access_with_adjusted_size(addr, &data, size,
-                                      mr->ops->impl.min_access_size,
-                                      mr->ops->impl.max_access_size,
-                                      memory_region_write_with_attrs_accessor,
-                                      mr, attrs);
+                                         memory_region_write_accessor,
+                                         mr, attrs);
+    } else { /* size >= 8 but no writeb callback */
+        abort();
     }
+    return r;
 }
 
 void memory_region_init_io(MemoryRegion *mr,
