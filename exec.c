@@ -3263,7 +3263,6 @@ static MemTxResult flatview_write_continue(FlatView *fv, hwaddr addr,
                                            hwaddr l, MemoryRegion *mr)
 {
     uint8_t *ptr;
-    uint64_t val;
     MemTxResult result = MEMTX_OK;
     bool release_lock = false;
 
@@ -3273,8 +3272,7 @@ static MemTxResult flatview_write_continue(FlatView *fv, hwaddr addr,
             l = memory_access_size(mr, l, addr1);
             /* XXX: could force current_cpu to NULL to avoid
                potential bugs */
-            val = ldn_p(buf, l);
-            result |= memory_region_dispatch_write(mr, addr1, val, l, attrs);
+            result |= memory_region_dispatch_writeb(mr, addr1, buf, l, attrs);
         } else {
             /* RAM case */
             ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);
@@ -3326,7 +3324,6 @@ MemTxResult flatview_read_continue(FlatView *fv, hwaddr addr,
                                    MemoryRegion *mr)
 {
     uint8_t *ptr;
-    uint64_t val;
     MemTxResult result = MEMTX_OK;
     bool release_lock = false;
 
@@ -3335,8 +3332,7 @@ MemTxResult flatview_read_continue(FlatView *fv, hwaddr addr,
             /* I/O case */
             release_lock |= prepare_mmio_access(mr);
             l = memory_access_size(mr, l, addr1);
-            result |= memory_region_dispatch_read(mr, addr1, &val, l, attrs);
-            stn_p(buf, l, val);
+            result |= memory_region_dispatch_readb(mr, addr1, buf, l, attrs);
         } else {
             /* RAM case */
             ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);

@@ -170,6 +170,17 @@ struct MemoryRegionOps {
                                     unsigned size,
                                     MemTxAttrs attrs);
 
+    MemTxResult (*readb_with_attrs)(void *opaque,
+                                   hwaddr addr,
+                                   uint8_t *data,
+                                   unsigned size,
+                                   MemTxAttrs attrs);
+    MemTxResult (*writeb_with_attrs)(void *opaque,
+                                    hwaddr addr,
+                                    const uint8_t *data,
+                                    unsigned size,
+                                    MemTxAttrs attrs);
+
     enum device_endian endianness;
     /* Guest-visible constraints: */
     struct {
@@ -1747,6 +1758,21 @@ MemTxResult memory_region_dispatch_read(MemoryRegion *mr,
                                         unsigned size,
                                         MemTxAttrs attrs);
 /**
+ * memory_region_dispatch_readb: read a sequence of bytes directly from the
+ * specified MemoryRegion.
+ *
+ * @mr: #MemoryRegion to access
+ * @addr: address within that region
+ * @data: pointer to the destination buffer to which to write the data
+ * @size: size of the access in bytes
+ * @attrs: memory transaction attributes to use for the access
+ */
+MemTxResult memory_region_dispatch_readb(MemoryRegion *mr,
+                                         hwaddr addr,
+                                         uint8_t *data,
+                                         unsigned size,
+                                         MemTxAttrs attrs);
+/**
  * memory_region_dispatch_write: perform a write directly to the specified
  * MemoryRegion.
  *
@@ -1761,6 +1787,21 @@ MemTxResult memory_region_dispatch_write(MemoryRegion *mr,
                                          uint64_t data,
                                          unsigned size,
                                          MemTxAttrs attrs);
+/**
+ * memory_region_dispatch_writeb: write a sequence of bytes directly to the
+ * the specified MemoryRegion.
+ *
+ * @mr: #MemoryRegion to access
+ * @addr: address within that region
+ * @data: pointer to the bytes to write
+ * @size: size of the access in bytes
+ * @attrs: memory transaction attributes to use for the access
+ */
+MemTxResult memory_region_dispatch_writeb(MemoryRegion *mr,
+                                          hwaddr addr,
+                                          const uint8_t *data,
+                                          unsigned size,
+                                          MemTxAttrs attrs);
 
 /**
  * address_space_init: initializes an address space
