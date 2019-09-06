@@ -75,7 +75,6 @@ typedef struct PL35xItf {
     bool w_new_ecc;
     uint32_t buf_count;
     uint8_t buff[2048];
- 
 } PL35xItf;
 
 typedef struct PL35xState {
@@ -85,7 +84,7 @@ typedef struct PL35xState {
 
     /* FIXME: add support for multiple chip selects/interface */
 
-    PL35xItf itf[2];
+    PL35xItf itf[2][4];
 
     /* FIXME: add Interrupt support */
 
@@ -192,14 +191,14 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     case 0x0:
       {
         int rdy;
-        if (s->itf[0].dev && object_dynamic_cast(OBJECT(s->itf[0].dev),
+        if (s->itf[0][0].dev && object_dynamic_cast(OBJECT(s->itf[0][0].dev),
                                                       "nand")) {
-            nand_getpins(s->itf[0].dev, &rdy);
+            nand_getpins(s->itf[0][0].dev, &rdy);
             r |= (!!rdy) << 5;
         }
-        if (s->itf[1].dev && object_dynamic_cast(OBJECT(s->itf[1].dev),
+        if (s->itf[1][0].dev && object_dynamic_cast(OBJECT(s->itf[1][0].dev),
                                                       "nand")) {
-            nand_getpins(s->itf[1].dev, &rdy);
+            nand_getpins(s->itf[1][0].dev, &rdy);
             r |= (!!rdy) << 6;
         }
         }
@@ -488,51 +487,74 @@ const MemoryRegionOps nand_ops = {
     }
 };
 
+static void init_itf_sram(gpointer data, gpointer opaque)
+{
+//    GSList * list = data;
+//    PL35xItf *itf ;
+    DeviceState * dev = opaque;
+    PL35xState *s = PL35X(dev);
+    char str[20];
+    uint32_t rank = object_property_get_int(OBJECT(data), "rank", NULL);
+ 
+    if (s->itf[0][rank].dev == NULL) {
+//        s = (PL35xState *)itf[rank].parent;
+        s->itf[0][rank].dev = DEVICE(data);
+        uint32_t high_addr = object_property_get_int(OBJECT(data), "start_addr_high",
+                                          NULL);
+        uint32_t low_addr = object_property_get_int(OBJECT(data), "start_addr_low",
+                                          NULL);
+        uint32_t region_size = object_property_get_int(OBJECT(data), "region_size",
+                                          NULL);
+        sprintf(str, "pl35x.sram%1d",rank);
+        memory_region_init_io(&s->itf[0][rank].mm, OBJECT(data), &offchip_sram_ops, data, str, region_size);
+        sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[0][rank].mm);
+        if (s->itf[0][rank].mm.container == NULL) { /* SRAM */
+	        uint64_t address = (uint64_t) high_addr << 32 | low_addr;
+                memory_region_add_subregion(s->mmio.container, address, &s->itf[0][rank].mm);
+        }
+    }
+}
+
+static void init_itf_nand(gpointer data, gpointer opaque)
+{
+//    GSList * list = data;
+//    PL35xItf *itf = opaque;
+    DeviceState * dev = opaque;
+    PL35xState *s = PL35X(dev);
+    char str[20];
+    uint32_t rank = object_property_get_int(OBJECT(data), "rank", NULL);
+    if (s->itf[1][rank].dev == NULL) {
+        s->itf[1][rank].dev = DEVICE(data);
+        uint32_t high_addr = object_property_get_int(OBJECT(data), "start_addr_high",
+                                      NULL);
+        uint32_t low_addr = object_property_get_int(OBJECT(data), "start_addr_low",
+                                      NULL);
+        uint32_t region_size = object_property_get_int(OBJECT(data), "region_size",
+                                      NULL);
+        sprintf(str, "pl35x.nand%1d", rank);
+        memory_region_init_io(&s->itf[1][rank].mm, OBJECT(dev), &nand_ops, &s->itf[1][rank], str, region_size);
+        sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[1][rank].mm);
+        if (!s->itf[1][rank].mm.container) { /* NAND */
+	        uint64_t address = (uint64_t) high_addr << 32 | low_addr;
+            memory_region_add_subregion(s->mmio.container, address, &s->itf[1][rank].mm);
+        }
+    }
+    s->itf[1][rank].ecc_r_data_size = 0;
+    s->itf[1][rank].ecc_w_data_size = 0;
+    s->itf[1][rank].r_new_ecc = false;
+    s->itf[1][rank].w_new_ecc = false;
+    pl35x_ecc_init(&s->itf[1][rank]);
+}
+
 static void pl35x_reset(DeviceState *dev)
 {
     PL35xState *s = PL35X(dev);
     /* if child for sram exists */
     GSList * list = pl35x_get_device_list_sram(OBJECT(dev));
-    if (list) { /* sram exists */
-        if (s->itf[0].dev == NULL) {
-            s->itf[0].dev = DEVICE(list->data);
-            uint32_t high_addr = object_property_get_int(OBJECT(list->data), "start_addr_high",
-                                          NULL);
-            uint32_t low_addr = object_property_get_int(OBJECT(list->data), "start_addr_low",
-                                          NULL);
-            uint32_t region_size = object_property_get_int(OBJECT(list->data), "region_size",
-                                          NULL);
-            memory_region_init_io(&s->itf[0].mm, OBJECT(list->data), &offchip_sram_ops, OBJECT(list->data), "pl35x.sram", region_size);
-            if (s->itf[0].mm.container == NULL) { /* SRAM */
-	        uint64_t address = (uint64_t) high_addr << 32 | low_addr;
-                memory_region_add_subregion(s->mmio.container, address, &s->itf[0].mm);
-            }
-        }
-    }
+    g_slist_foreach(list, init_itf_sram, s);
     /* if child for nand exists */
     list = pl35x_get_device_list_nand(OBJECT(dev));
-    if (list) { /* nand exists */
-        if (s->itf[1].dev == NULL) {
-            s->itf[1].dev = DEVICE(list->data);
-            uint32_t high_addr = object_property_get_int(OBJECT(list->data), "start_addr_high",
-                                          NULL);
-            uint32_t low_addr = object_property_get_int(OBJECT(list->data), "start_addr_low",
-                                          NULL);
-            uint32_t region_size = object_property_get_int(OBJECT(list->data), "region_size",
-                                          NULL);
-            memory_region_init_io(&s->itf[1].mm, OBJECT(dev), &nand_ops, &s->itf[1], "pl35x.nand", region_size);
-            sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[1].mm);
-            if (!s->itf[1].mm.container) { /* NAND */
-	        uint64_t address = (uint64_t) high_addr << 32 | low_addr;
-                memory_region_add_subregion(s->mmio.container, address, &s->itf[1].mm);
-            }
-        }
-        s->itf[1].ecc_r_data_size = 0;
-        s->itf[1].ecc_w_data_size = 0;
-        s->itf[1].r_new_ecc = false;
-        s->itf[1].w_new_ecc = false;
-        pl35x_ecc_init(&s->itf[1]);
-    }
+    g_slist_foreach(list, init_itf_nand, dev);
 }
 
 static void pl35x_init_sram(SysBusDevice *dev, PL35xItf *itf)
@@ -545,58 +567,79 @@ static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
 {
     /* all of the functionalities are moved to pl35x_reset() */
     return;
-    /* assume 1st pflash drive */
-    // DriveInfo *dinfo = drive_get_next(IF_PFLASH); 
-    DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, 0);
-    if (dinfo) {
-        itf->dev = nand_init(dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
-                               NAND_MFR_MICRON, 0xaa);	/* from drivers/mtd/nand/nand_ids.c, MiB */
-        assert(object_dynamic_cast(OBJECT(itf->dev), "nand"));
-    } else {
-        itf->dev = NULL; 
-    }
-
-    // Still memory init is needed not to generate "Unassigned memory access"
-    memory_region_init_io(&itf->mm, OBJECT(dev), &nand_ops, itf, "pl35x.nand",
-                          1 << 29); // 256 MB NAND + extra bytes for OOBs
-    sysbus_init_mmio(dev, &itf->mm);
 }
 
 static int pl35x_init(SysBusDevice *dev)
 {
     PL35xState *s = PL35X(dev);
+    int i;
 
     memory_region_init_io(&s->mmio, OBJECT(dev), &pl35x_ops, s, "pl35x_io",
                           0x1000);
     sysbus_init_mmio(dev, &s->mmio);
     if (s->x == 1) { /* PL351 have NAND */
-        pl35x_init_nand(dev, &s->itf[0]);
+        pl35x_init_nand(dev, &s->itf[0][0]);
     }
     if (s->x == 0x2) { 
-        pl35x_init_sram(dev, &s->itf[0]);
+        pl35x_init_sram(dev, &s->itf[0][0]);
     }
     if (s->x == 0x3) { /* PL353 have SRAM and NAND */
-        pl35x_init_nand(dev, &s->itf[1]);
-        pl35x_init_sram(dev, &s->itf[0]);
+        for (i = 0; i < 4; i++) {
+            pl35x_init_nand(dev, &s->itf[1][i]);
+            pl35x_init_sram(dev, &s->itf[0][i]);
+        }
     } else if (s->x == 4) { /* PL354 has a second SRAM */
-        pl35x_init_sram(dev, &s->itf[0]);
-        pl35x_init_sram(dev, &s->itf[1]);
+        pl35x_init_sram(dev, &s->itf[0][0]);
+        pl35x_init_sram(dev, &s->itf[1][0]);
     }
-    s->itf[0].parent = s;
-    s->itf[1].parent = s;
+    for (i = 0; i < 4; i++) {
+        s->itf[0][i].parent = dev;
+        s->itf[1][i].parent = dev;
+    }
     return 0;
 }
+
 static void pl35x_initfn(Object *obj)
 {
     PL35xState *s = PL35X(obj);
 
-    object_property_add_link(obj, "dev0", TYPE_DEVICE,
-                             (Object **)&s->itf[0].dev,
+    object_property_add_link(obj, "dev00", TYPE_DEVICE,
+                             (Object **)&s->itf[0][0].dev,
                              object_property_allow_set_link,
                              OBJ_PROP_LINK_UNREF_ON_RELEASE,
                              &error_abort);
-    object_property_add_link(obj, "dev1", TYPE_DEVICE,
-                             (Object **)&s->itf[1].dev,
+    object_property_add_link(obj, "dev01", TYPE_DEVICE,
+                             (Object **)&s->itf[0][1].dev,
+                             object_property_allow_set_link,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+    object_property_add_link(obj, "dev02", TYPE_DEVICE,
+                             (Object **)&s->itf[0][2].dev,
+                             object_property_allow_set_link,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+    object_property_add_link(obj, "dev03", TYPE_DEVICE,
+                             (Object **)&s->itf[0][3].dev,
+                             object_property_allow_set_link,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+    object_property_add_link(obj, "dev10", TYPE_DEVICE,
+                             (Object **)&s->itf[1][0].dev,
+                             object_property_allow_set_link,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+    object_property_add_link(obj, "dev11", TYPE_DEVICE,
+                             (Object **)&s->itf[1][1].dev,
+                             object_property_allow_set_link,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+    object_property_add_link(obj, "dev12", TYPE_DEVICE,
+                             (Object **)&s->itf[1][2].dev,
+                             object_property_allow_set_link,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                             &error_abort);
+    object_property_add_link(obj, "dev13", TYPE_DEVICE,
+                             (Object **)&s->itf[1][3].dev,
                              object_property_allow_set_link,
                              OBJ_PROP_LINK_UNREF_ON_RELEASE,
                              &error_abort);
@@ -612,8 +655,8 @@ static const VMStateDescription vmstate_pl35x = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT8(itf[0].nand_pending_addr_cycles, PL35xState),
-        VMSTATE_UINT8(itf[1].nand_pending_addr_cycles, PL35xState),
+        VMSTATE_UINT8(itf[0][0].nand_pending_addr_cycles, PL35xState),
+        VMSTATE_UINT8(itf[1][0].nand_pending_addr_cycles, PL35xState),
         VMSTATE_END_OF_LIST()
     }
 };
