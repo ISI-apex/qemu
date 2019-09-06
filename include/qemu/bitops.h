@@ -222,6 +222,21 @@ static inline unsigned log2_of_pow2(unsigned long v)
     return b;
 }
 
+/* is_pow2 - returns true if value is a power of 2
+ * @v: The value to check
+ */
+static inline bool is_pow2(unsigned v)
+{
+    int b = 0;
+    if (v == 0)
+        return false;
+    while (v > 0) {
+        b += v & 0x1;
+        v >>= 1;
+    }
+    return b == 1;
+}
+
 /**
  * rol8 - rotate an 8-bit value left
  * @word: value to rotate
