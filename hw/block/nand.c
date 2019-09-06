@@ -79,6 +79,7 @@ struct NANDFlashState {
     uint32_t region_size;	/* size of SRAM */
     uint32_t start_addr_high;	/* start address high */
     uint32_t start_addr_low;	/* start address low */
+    uint32_t rank;	/* memory rank*/
 
     uint8_t cle, ale, ce, wp, gnd;
 
@@ -682,6 +683,7 @@ static Property nand_properties[] = {
     DEFINE_PROP_UINT32("region_size", NANDFlashState, region_size, 0),
     DEFINE_PROP_UINT32("start_addr_high", NANDFlashState, start_addr_high, 0),
     DEFINE_PROP_UINT32("start_addr_low", NANDFlashState, start_addr_low, 0),
+    DEFINE_PROP_UINT32("rank", NANDFlashState, rank, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 

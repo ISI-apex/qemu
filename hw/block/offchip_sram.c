@@ -35,12 +35,14 @@ typedef struct OFFCHIP_SRAMState OFFCHIP_SRAMState;
 struct OFFCHIP_SRAMState {
 //    DeviceState parent_obj;
     SysBusDevice parent_obj;
+    uint32_t rank;	/* index of memory rank */
     uint32_t pflash_index;	/* index of pflash device */
     uint32_t region_size;	/* size of SRAM */
     uint32_t start_addr_high;	/* start address high */
     uint32_t start_addr_low;	/* start address low */
     uint64_t addr;	/* address for debugging */
     MemoryRegion iomem;
+    MemoryRegion container;
     BlockBackend *blk;
 };
 
@@ -144,6 +146,7 @@ static Property offchip_sram_properties[] = {
     DEFINE_PROP_UINT32("region_size", OFFCHIP_SRAMState, region_size, 0),
     DEFINE_PROP_UINT32("start_addr_high", OFFCHIP_SRAMState, start_addr_high, 0),
     DEFINE_PROP_UINT32("start_addr_low", OFFCHIP_SRAMState, start_addr_low, 0),
+    DEFINE_PROP_UINT32("rank", OFFCHIP_SRAMState, rank, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
