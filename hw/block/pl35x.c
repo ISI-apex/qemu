@@ -330,7 +330,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
                            unsigned int size)
 {
     PL35xItf *s = opaque;
-    unsigned int len = size;
+    int len = size;
     int i;
     int shift = 0;
     uint32_t r = 0;
@@ -341,6 +341,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
     if (s->dev == NULL) 
         return 0x0;
 
+    int nand_width = nand_buswidth(s->dev);
     data_phase = (addr >> 19) & 1;
     end_cmd = (addr >> 11) & 0xff;
 
@@ -353,12 +354,12 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
             nand_getio(s->dev);
         }
     }
-    while (len--) {
-        uint8_t r8;
-
-        r8 = nand_getio(s->dev) & 0xff;
-        r |= r8 << shift;
-        shift += 8;
+    uint32_t mask = (1 << (nand_width << 3)) - 1;
+    while (len > 0) {
+        uint32_t r32 = nand_getio(s->dev) & mask;
+        r |= r32 << shift;
+        shift += (nand_width * 8);
+        len -= nand_width;
     }
     if (data_phase && end_cmd != 0) {
         if (s->r_new_ecc) {
@@ -395,6 +396,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     if (s->dev == NULL) 
         return;
 
+    int nand_width = nand_buswidth(s->dev);
     /* Decode the various signals.  */
     data_phase = (addr >> 19) & 1;
     ecmd_valid = (addr >> 20) & 1;
@@ -424,16 +426,21 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
 
     /* Writing data to the NAND.  */
     if (data_phase) {
-    DB_PRINT("data_phase: writing data to NAND\n");
-        nand_setpins(s->dev, 0, 0, 0, 1, 0);
-        while (size--) {
-            nand_setio(s->dev, value & 0xff);
-            if (s->w_new_ecc) {
-		assert(s->ecc_w_data_size <= nand_page_size(s->dev));
-                pl35x_ecc_digest(s, (uint8_t) (value & 0xff));
-                s->ecc_w_data_size++;
+    DB_PRINT("data_phase: writing data to NAND, start_cmd=%x end_cmd=%x\n", start_cmd, end_cmd);
+        nand_setpins(s->dev, 0, 0, 0, 1, 0);  /* cle(0), ale(0), ce(0), wp(1), gnd(0) */
+
+        uint32_t mask = (1 << (nand_width << 3)) - 1;
+        while (size > 0) {
+            nand_setio(s->dev, value & mask);
+            int i;
+            for (i = 0; i < nand_width; i++, size--) {
+                if (s->w_new_ecc) {
+	    	    assert(s->ecc_w_data_size <= nand_page_size(s->dev));
+                    pl35x_ecc_digest(s, (uint8_t) (value & 0xff));
+                    s->ecc_w_data_size++;
+                }
+                value >>= 8;
             }
-            value >>= 8;
         }
         if (s->w_new_ecc && s->ecc_w_data_size == nand_page_size(s->dev)) { /* save ecc */
             DB_PRINT("ECC is saved\n");
@@ -463,8 +470,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
         addr_cycles = 4;
     }
     while (addr_cycles) {
-        nand_setpins(s->dev, 0, 1, 0, 1, 0);
-        DB_PRINT("nand cycl=%d addr=%x\n", addr_cycles, nandaddr & 0xff);
+        nand_setpins(s->dev, 0, 1, 0, 1, 0); /* cle(0), ale(1), ce(0) */
         nand_setio(s->dev, nandaddr & 0xff);
         nandaddr >>= 8;
         addr_cycles--;
