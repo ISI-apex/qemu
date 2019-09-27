@@ -722,6 +722,12 @@ uint32_t nand_iolen(DeviceState * opaque)
    return s->iolen;
 }
 
+uint32_t nand_buswidth(DeviceState * opaque)
+{
+   NANDFlashState *s = NAND(opaque);
+   return s->buswidth;
+}
+
 /*
  * Chip inputs are CLE, ALE, CE, WP, GND and eight I/O pins.  Chip
  * outputs are R/B and eight I/O pins.
