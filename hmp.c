@@ -1116,6 +1116,19 @@ void hmp_pmemsave(Monitor *mon, const QDict *qdict)
     hmp_handle_error(mon, &err);
 }
 
+void hmp_pmemload(Monitor *mon, const QDict *qdict)
+{
+    const char *filename = qdict_get_str(qdict, "filename");
+    uint64_t addr = qdict_get_int(qdict, "val");
+    Error *err = NULL;
+	int cpu_index = get_monitor_cpu_index(mon);
+	if (cpu_index < 0)
+		return;
+
+    qmp_pmemload(addr, filename, true, cpu_index, &err);
+    hmp_handle_error(mon, &err);
+}
+
 void hmp_ringbuf_write(Monitor *mon, const QDict *qdict)
 {
     const char *chardev = qdict_get_str(qdict, "device");

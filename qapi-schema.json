@@ -1143,6 +1143,33 @@
   'data': {'val': 'int', 'size': 'int', 'filename': 'str', '*cpu-index': 'int'} }
 
 ##
+# @pmemload:
+#
+# Load a file into guest physical memory.
+#
+# @val: the physical address of the guest to start loading to
+#
+# @filename: the file to read the binary data from
+#
+# @cpu-index: the index of the virtual CPU to use for translating the
+#                       virtual address (defaults to CPU 0)
+#
+# Returns: Nothing on success
+#
+# Since: 2.11.1
+#
+# Example:
+#
+# -> { "execute": "pmemload",
+#      "arguments": { "val": 10,
+#                     "filename": "/tmp/data.bin" } }
+# <- { "return": {} }
+#
+##
+{ 'command': 'pmemload',
+  'data': {'val': 'int', 'filename': 'str', '*cpu-index': 'int'} }
+
+##
 # @cont:
 #
 # Resume guest VCPU execution.
