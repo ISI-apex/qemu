@@ -2461,6 +2461,39 @@ exit:
     fclose(f);
 }
 
+void qmp_pmemload(int64_t addr, const char *filename,
+                  bool has_cpu, int64_t cpu_index, Error **errp)
+{
+    FILE *f;
+    uint32_t l;
+    CPUState *cpu;
+    uint8_t buf[1024];
+
+    if (!has_cpu) {
+        cpu_index = 0;
+    }
+    cpu = get_cpu(cpu_index, errp);
+
+    f = fopen(filename, "rb");
+    if (!f) {
+        error_setg_file_open(errp, errno, filename);
+        return;
+    }
+
+    while (!feof(f)) {
+        l = fread(buf, 1, sizeof(buf), f);
+        if (l != sizeof(buf) && ferror(f)) {
+            error_setg(errp, QERR_IO_ERROR);
+            goto exit;
+        }
+        cpu_physical_memory_write_cpu(cpu, addr, buf, l);
+        addr += l;
+    }
+
+exit:
+    fclose(f);
+}
+
 void qmp_inject_nmi(Error **errp)
 {
     nmi_monitor_handle(monitor_get_cpu_index(), errp);
