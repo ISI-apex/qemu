@@ -142,10 +142,6 @@ static void arm_cpu_reset(CPUState *s)
     ARMCPU *cpu = ARM_CPU(s);
     ARMCPUClass *acc = ARM_CPU_GET_CLASS(cpu);
     CPUARMState *env = &cpu->env;
-#ifndef CONFIG_USER_ONLY
-    CPUClass *cc = CPU_GET_CLASS(s);
-    vaddr old_pc = cc->get_pc(s);
-#endif
 
     /* Needs to precede parent_reset, because parent_reset acts on this. */
     s->halted = s->arch_halt_pin = cpu->power_state == PSCI_OFF;
@@ -373,14 +369,6 @@ static void arm_cpu_reset(CPUState *s)
 #ifndef CONFIG_USER_ONLY
     if (kvm_enabled()) {
         kvm_arm_reset_vcpu(cpu);
-    }
-
-    if (!runstate_is_running()) {
-#ifdef HPSC
-        if (arm_feature(env, ARM_FEATURE_V8R) || arm_feature(env, ARM_FEATURE_AARCH64))
-          old_pc = env->pc;
-#endif
-        cc->set_pc(s, old_pc);
     }
 #endif
 
