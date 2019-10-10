@@ -324,6 +324,7 @@ MemoryRegion *sysbus_address_space(SysBusDevice *dev)
 static bool sysbus_parse_reg(FDTGenericMMap *obj, FDTGenericRegPropInfo reg,
                              Error **errp) {
     int i;
+    MemoryRegion *dev_mr;
 
     for (i = 0; i < reg.n; ++i) {
         MemoryRegion *mr_parent = (MemoryRegion *)
@@ -332,9 +333,10 @@ static bool sysbus_parse_reg(FDTGenericMMap *obj, FDTGenericRegPropInfo reg,
             /* evil */
             mr_parent = get_system_memory();
         }
+        dev_mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(obj), i);
+        memory_region_set_size(dev_mr, reg.s[i]);
         memory_region_add_subregion_overlap(mr_parent, reg.a[i],
-                    sysbus_mmio_get_region(SYS_BUS_DEVICE(obj), i),
-                    reg.p[i]);
+                dev_mr, reg.p[i]);
     }
     return false;
 }
