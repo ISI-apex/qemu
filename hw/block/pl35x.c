@@ -38,6 +38,10 @@
 
 #include "hw/block/offchip_sram.h"
 
+#define HPSC
+#define INTERFACE_NAND	1
+#define INTERFACE_SRAM  0
+
 #define ECC_BYTES_PER_SUBPAGE 3
 #define ECC_CODEWORD_SIZE 512
 
@@ -61,6 +65,19 @@ static const uint32_t pl35x_id[] = {
 #define PL35X(obj) \
      OBJECT_CHECK(PL35xState, (obj), TYPE_PL35X)
 
+#define CHIP_NUMBER_MASK 	0x7
+#define CHIP_NUMBER_MASK_SHIFT	23
+#define CHIP_TYPE_MASK 		0x3
+#define CHIP_TYPE_MASK_SHIFT	21
+#define CHIP_MASK_MW           0x3
+
+#define REG_SET_CYCLES	0x14
+#define REG_SET_OPMODE	0x18
+
+#define REG_CYCLES_BASE	0x100
+#define REG_OPMODE_BASE 0x104
+
+
 typedef struct PL35xItf {
     MemoryRegion mm;
     DeviceState *dev;
@@ -75,6 +92,9 @@ typedef struct PL35xItf {
     bool w_new_ecc;
     uint32_t buf_count;
     uint8_t buff[2048];
+    uint32_t buswidth;
+    uint8_t interface;
+    uint8_t mem_rank;
 } PL35xItf;
 
 typedef struct PL35xState {
@@ -258,18 +278,45 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
 static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
                       unsigned int size)
 {
+    uint32_t chip_number, cmd_type, reg_no, buswidth, interface, rank;
+
     DB_PRINT("=== addr = 0x%x v = 0x%x\n", (unsigned)addr, (unsigned)value64);
     PL35xState *s = opaque;
     switch (addr) {
     case 0x8:
     case 0xc:
-    case 0x10:
     case 0x14:
     case 0x18:
-    case 0x1c:
     case 0x20:
     case 0x24:
         s->regs[addr >> 2] = value64;
+        break;
+    case 0x10:	/* direct cmd */
+        /* get <x> <n> from cmd register */
+        chip_number = (value64 >> CHIP_NUMBER_MASK_SHIFT) & CHIP_NUMBER_MASK;
+        cmd_type = (value64 >> CHIP_TYPE_MASK_SHIFT) & CHIP_TYPE_MASK;
+        /* set the corresponding registers */
+        switch (cmd_type) {
+            case 1: /* ModeReg */
+                DB_PRINT("Direct CMD, ModeReg is not implemented\n");
+                break;
+            case 0: /* UpateRegs and AXI */
+            case 2: /* UpateRegs */
+            case 3: /* ModeReg and UpateRegs */
+                /* Set Operating Mode Reg --> Operating Mode Status Register */
+                reg_no = REG_OPMODE_BASE + chip_number * 0x20;
+                s->regs[reg_no >> 2] = s->regs[REG_SET_OPMODE >> 2];
+                buswidth = s->regs[reg_no >> 2] % CHIP_MASK_MW;
+                interface = (chip_number >= 0x4 ? 1 : 0);
+                rank = chip_number & 0x3;
+                s->itf[interface][rank].buswidth = (buswidth == 2 ? buswidth + 2 : buswidth + 1);
+                /* Set Cycle Reg --> Sram/Nand Cycle Register */
+                reg_no = REG_CYCLES_BASE + chip_number * 0x20;
+                s->regs[reg_no >> 2] = s->regs[REG_SET_CYCLES >> 2];
+                if (cmd_type == 0) { DB_PRINT("Direct CMD, AXI is not implemented\n"); }
+                if (cmd_type == 3) { DB_PRINT("Direct CMD, ModeReg is not implemented\n"); }
+                break;
+        }
         break;
     case 0x100:
     case 0x120:
@@ -339,7 +386,7 @@ static uint64_t nand_read(void *opaque, hwaddr addr,
     if (s->dev == NULL)
         return 0x0;
 
-    int nand_width = nand_buswidth(s->dev);
+    int nand_width = s->buswidth;
     data_phase = (addr >> 19) & 1;
     end_cmd = (addr >> 11) & 0xff;
 
@@ -393,7 +440,7 @@ static void nand_write(void *opaque, hwaddr addr, uint64_t value64,
     if (s->dev == NULL)
         return;
 
-    int nand_width = nand_buswidth(s->dev);
+    int nand_width = s->buswidth;
     /* Decode the various signals.  */
     data_phase = (addr >> 19) & 1;
     ecmd_valid = (addr >> 20) & 1;
@@ -503,8 +550,8 @@ static void init_itf_sram(gpointer data, gpointer opaque)
     char name[20];
     unsigned rank = object_property_get_int(OBJECT(data), "rank", NULL);
 
-    if (s->itf[0][rank].dev == NULL) {
-        s->itf[0][rank].dev = DEVICE(data);
+    if (s->itf[INTERFACE_SRAM][rank].dev == NULL) {
+        s->itf[INTERFACE_SRAM][rank].dev = DEVICE(data);
         uint32_t high_addr = object_property_get_int(OBJECT(data),
                                     "start_addr_high", NULL);
         uint32_t low_addr = object_property_get_int(OBJECT(data),
@@ -513,13 +560,13 @@ static void init_itf_sram(gpointer data, gpointer opaque)
                                     "region_size", NULL);
 
         sprintf(name, "pl35x.sram%1d", rank);
-        memory_region_init_io(&s->itf[0][rank].mm, OBJECT(data),
+        memory_region_init_io(&s->itf[INTERFACE_SRAM][rank].mm, OBJECT(data),
                               &offchip_sram_ops, OBJECT(data),
                               name, region_size);
-        sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[0][rank].mm);
+        sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[INTERFACE_SRAM][rank].mm);
         if (s->itf[0][rank].mm.container == NULL) { /* SRAM */
             uint64_t address = (uint64_t) high_addr << 32 | low_addr;
-            memory_region_add_subregion(s->mmio.container, address, &s->itf[0][rank].mm);
+            memory_region_add_subregion(s->mmio.container, address, &s->itf[INTERFACE_SRAM][rank].mm);
         }
     }
 }
@@ -532,8 +579,8 @@ static void init_itf_nand(gpointer data, gpointer opaque)
     PL35xState *s = PL35X(dev);
     char name[20];
     uint32_t rank = object_property_get_int(OBJECT(data), "rank", NULL);
-    if (s->itf[1][rank].dev == NULL) {
-        s->itf[1][rank].dev = DEVICE(data);
+    if (s->itf[INTERFACE_NAND][rank].dev == NULL) {
+        s->itf[INTERFACE_NAND][rank].dev = DEVICE(data);
         uint32_t high_addr = object_property_get_int(OBJECT(data),
                                         "start_addr_high", NULL);
         uint32_t low_addr = object_property_get_int(OBJECT(data),
@@ -541,23 +588,24 @@ static void init_itf_nand(gpointer data, gpointer opaque)
         uint32_t region_size = object_property_get_int(OBJECT(data),
                                         "region_size", NULL);
         sprintf(name, "pl35x.nand%1d", rank);
-        memory_region_init_io(&s->itf[1][rank].mm, OBJECT(dev),
-                              &nand_ops, &s->itf[1][rank], name, region_size);
-        sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[1][rank].mm);
-        if (!s->itf[1][rank].mm.container) { /* NAND */
+        memory_region_init_io(&s->itf[INTERFACE_NAND][rank].mm, OBJECT(dev),
+                              &nand_ops, &s->itf[INTERFACE_NAND][rank], name, region_size);
+        sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[INTERFACE_NAND][rank].mm);
+        if (!s->itf[INTERFACE_NAND][rank].mm.container) { /* NAND */
             uint64_t address = (uint64_t) high_addr << 32 | low_addr;
-            memory_region_add_subregion(s->mmio.container, address, &s->itf[1][rank].mm);
+            memory_region_add_subregion(s->mmio.container, address, &s->itf[INTERFACE_NAND][rank].mm);
         }
     }
-    s->itf[1][rank].ecc_r_data_size = 0;
-    s->itf[1][rank].ecc_w_data_size = 0;
-    s->itf[1][rank].r_new_ecc = false;
-    s->itf[1][rank].w_new_ecc = false;
-    pl35x_ecc_init(&s->itf[1][rank]);
+    s->itf[INTERFACE_NAND][rank].ecc_r_data_size = 0;
+    s->itf[INTERFACE_NAND][rank].ecc_w_data_size = 0;
+    s->itf[INTERFACE_NAND][rank].r_new_ecc = false;
+    s->itf[INTERFACE_NAND][rank].w_new_ecc = false;
+    pl35x_ecc_init(&s->itf[INTERFACE_NAND][rank]);
 }
 
 static void pl35x_reset(DeviceState *dev)
 {
+    int i, j;
     PL35xState *s = PL35X(dev);
     /* if child for sram exists */
     GSList * list = pl35x_get_device_list_sram(OBJECT(dev));
@@ -565,47 +613,28 @@ static void pl35x_reset(DeviceState *dev)
     /* if child for nand exists */
     list = pl35x_get_device_list_nand(OBJECT(dev));
     g_slist_foreach(list, init_itf_nand, dev);
+    for (i = 0; i < 2; i++)
+        for (j = 0; j < 4; j++) {
+            s->itf[i][j].interface = i;
+            s->itf[i][j].mem_rank = j;
+        }
 }
 
-static void pl35x_init_sram(SysBusDevice *dev, PL35xItf *itf)
-{
-    /* all of the functionalities are moved to pl35x_reset() */
-    return;
-}
-
-static void pl35x_init_nand(SysBusDevice *dev, PL35xItf *itf)
-{
-    /* all of the functionalities are moved to pl35x_reset() */
-    return;
-}
-
+static int num_instances = 0;
 static void pl35x_init(Object *obj)
 {
-    SysBusDevice *dev = SYS_BUS_DEVICE(obj);
     PL35xState *s = PL35X(obj);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
     int i;
-
-    memory_region_init_io(&s->mmio, OBJECT(dev), &pl35x_ops, s, "pl35x_io",
+    char name[20];
+    sprintf(name, "pl35x_io_%1d", num_instances++);
+    memory_region_init_io(&s->mmio, OBJECT(obj), &pl35x_ops, s, name,
                           0x1000);
-    sysbus_init_mmio(dev, &s->mmio);
-    if (s->x == 1) { /* PL351 have NAND */
-        pl35x_init_nand(dev, &s->itf[0][0]);
-    }
-    if (s->x == 0x2) {
-        pl35x_init_sram(dev, &s->itf[0][0]);
-    }
-    if (s->x == 0x3) { /* PL353 have SRAM and NAND */
-        for (i = 0; i < 4; i++) {
-            pl35x_init_nand(dev, &s->itf[1][i]);
-            pl35x_init_sram(dev, &s->itf[0][i]);
-        }
-    } else if (s->x == 4) { /* PL354 has a second SRAM */
-        pl35x_init_sram(dev, &s->itf[0][0]);
-        pl35x_init_sram(dev, &s->itf[1][0]);
-    }
+    sysbus_init_mmio(sbd, &s->mmio);
+
     for (i = 0; i < 4; i++) {
-        s->itf[0][i].parent = dev;
-        s->itf[1][i].parent = dev;
+        s->itf[0][i].parent = sbd;
+        s->itf[1][i].parent = sbd;
     }
 
     object_property_add_link(obj, "dev00", TYPE_DEVICE,
@@ -628,6 +657,7 @@ static void pl35x_init(Object *obj)
                              object_property_allow_set_link,
                              OBJ_PROP_LINK_STRONG,
                              &error_abort);
+    if (s->x < 3) return;
     object_property_add_link(obj, "dev10", TYPE_DEVICE,
                              (Object **)&s->itf[1][0].dev,
                              object_property_allow_set_link,
