@@ -66,7 +66,7 @@
 # define NAND_IOSTATUS_UNPROTCT	(1 << 7)
 
 # define MAX_PAGE		0x800
-# define MAX_OOB		0x40
+# define MAX_OOB		0x80
 # define MAX_PARM_PAGE_SIZE     256
 # define MAX_EXT_PARM_PAGE_SIZE 48
 
@@ -78,6 +78,8 @@ struct NANDFlashState {
     MemoryRegion iomem;
 
     uint8_t manf_id, chip_id;
+    uint32_t full_id_low;
+    uint32_t full_id_high;
     uint8_t buswidth; /* in BYTES */
     uint64_t size;
     int  pages;
@@ -139,11 +141,12 @@ static void mem_and(uint8_t *dest, const uint8_t *src, size_t n)
 
 #define HPSC
 # define PAGE(addr)		((addr) >> PAGE_SHIFT)
-# define PAGE_START(page)	(PAGE(page) * (PAGE_SIZE + OOB_SIZE))
+# define PAGE_START(page)	(PAGE(page) * (PAGE_SIZE + __oob_size))
 # define PAGE_MASK		((1 << PAGE_SHIFT) - 1)
 
-# define OOB_SHIFT		(PAGE_SHIFT - 5)
-# define OOB_SIZE		(1 << OOB_SHIFT)
+static int __oob_shift = 0;
+static int __oob_size = 0;
+
 # define SECTOR(addr)		((addr) >> (9 + ADDR_SHIFT - PAGE_SHIFT))
 # define SECTOR_OFFSET(addr)	((addr) & ((511 >> PAGE_SHIFT) << 8))
 
@@ -437,16 +440,21 @@ static void nand_command(NANDFlashState *s)
     case NAND_CMD_READID:
         s->ioaddr = s->io;
         s->iolen = 0;
-        nand_pushio_byte(s, s->manf_id);
-        nand_pushio_byte(s, s->chip_id);
-        nand_pushio_byte(s, 'Q'); /* Don't-care byte (often 0xa5) */
-        if (nand_flash_ids[s->chip_id].options & NAND_SAMSUNG_LP) {
-            /* Page Size, Block Size, Spare Size; bit 6 indicates
-             * 8 vs 16 bit width NAND.
-             */
-            nand_pushio_byte(s, (s->buswidth == 2) ? 0x55 : 0x15);
+        if (s->full_id_low != 0) {
+            for (i=0; i < 4; i++) nand_pushio_byte(s, (s->full_id_low >> (i << 3)) & 0xff);
+            for (i=0; i < 4; i++) nand_pushio_byte(s, (s->full_id_high >> (i << 3)) & 0xff);
         } else {
-            nand_pushio_byte(s, 0xc0); /* Multi-plane */
+            nand_pushio_byte(s, s->manf_id);
+            nand_pushio_byte(s, s->chip_id);
+            nand_pushio_byte(s, 'Q'); /* Don't-care byte (often 0xa5) */
+            if (nand_flash_ids[s->chip_id].options & NAND_SAMSUNG_LP) {
+                /* Page Size, Block Size, Spare Size; bit 6 indicates
+                 * 8 vs 16 bit width NAND.
+                 */
+                nand_pushio_byte(s, (s->buswidth == 2) ? 0x55 : 0x15);
+            } else {
+                nand_pushio_byte(s, 0xc0); /* Multi-plane */
+            }
         }
         break;
     case NAND_CMD_READ_PARAMETER_PAGE:
@@ -687,6 +695,8 @@ static Property nand_properties[] = {
     DEFINE_PROP_UINT32("start_addr_high", NANDFlashState, start_addr_high, 0),
     DEFINE_PROP_UINT32("start_addr_low", NANDFlashState, start_addr_low, 0),
     DEFINE_PROP_UINT32("rank", NANDFlashState, rank, 0),
+    DEFINE_PROP_UINT32("full_id_low", NANDFlashState, full_id_low, 0),
+    DEFINE_PROP_UINT32("full_id_high", NANDFlashState, full_id_high, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -724,12 +734,6 @@ uint32_t nand_iolen(DeviceState * opaque)
 {
    NANDFlashState *s = NAND(opaque);
    return s->iolen;
-}
-
-uint32_t nand_buswidth(DeviceState * opaque)
-{
-   NANDFlashState *s = NAND(opaque);
-   return s->buswidth;
 }
 
 /*
@@ -978,8 +982,8 @@ static void glue(nand_blk_write_, PAGE_SIZE)(NANDFlashState *s)
         mem_and(iobuf + (soff | off), s->io, MIN(s->iolen, PAGE_SIZE - off));
         if (off + s->iolen > PAGE_SIZE) {
             page = PAGE(s->addr);
-            mem_and(s->storage + (page << OOB_SHIFT), s->io + PAGE_SIZE - off,
-                            MIN(OOB_SIZE, off + s->iolen - PAGE_SIZE));
+            mem_and(s->storage + (page << __oob_shift), s->io + PAGE_SIZE - off,
+                            MIN(__oob_size, off + s->iolen - PAGE_SIZE));
         }
 
         if (blk_pwrite(s->blk, sector << BDRV_SECTOR_BITS, iobuf,
@@ -1027,10 +1031,10 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
 
     if (!s->blk) {
         memset(s->storage + PAGE_START(addr),
-                        0xff, (PAGE_SIZE + OOB_SIZE) << s->erase_shift);
+                        0xff, (PAGE_SIZE + __oob_size) << s->erase_shift);
     } else if (s->mem_oob) {
-        memset(s->storage + (PAGE(addr) << OOB_SHIFT),
-                        0xff, OOB_SIZE << s->erase_shift);
+        memset(s->storage + (PAGE(addr) << __oob_shift),
+                        0xff, __oob_size << s->erase_shift);
         i = SECTOR(addr);
         page = SECTOR(addr + (1 << (ADDR_SHIFT + s->erase_shift)));
         for (; i < page; i ++)
@@ -1053,7 +1057,7 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
 
         memset(iobuf, 0xff, 0x200);
         i = (addr & ~0x1ff) + 0x200;
-        for (addr += ((PAGE_SIZE + OOB_SIZE) << s->erase_shift) - 0x200;
+        for (addr += ((PAGE_SIZE + __oob_size) << s->erase_shift) - 0x200;
                         i < addr; i += 0x200) {
             if (blk_pwrite(s->blk, i, iobuf, BDRV_SECTOR_SIZE, 0) < 0) {
                 printf("write error in sector %" PRIu64 "\n",
@@ -1091,8 +1095,8 @@ static void glue(nand_blk_load_, PAGE_SIZE)(NANDFlashState *s,
                                 SECTOR(addr));
             }
             memcpy(s->io + SECTOR_OFFSET(s->addr) + PAGE_SIZE,
-                            s->storage + (PAGE(s->addr) << OOB_SHIFT),
-                            OOB_SIZE);
+                            s->storage + (PAGE(s->addr) << __oob_shift),
+                            __oob_size);
             s->ioaddr = s->io + SECTOR_OFFSET(s->addr) + offset;
         } else {
             /* blk_pread: reads data from PAGE_START(addr) */
@@ -1109,7 +1113,7 @@ static void glue(nand_blk_load_, PAGE_SIZE)(NANDFlashState *s,
         }
     } else {
         memcpy(s->io, s->storage + PAGE_START(s->addr) +
-                        offset, PAGE_SIZE + OOB_SIZE - offset);
+                        offset, PAGE_SIZE + __oob_size - offset);
         s->ioaddr = s->io;
     }
 }
@@ -1117,6 +1121,12 @@ static void glue(nand_blk_load_, PAGE_SIZE)(NANDFlashState *s,
 static void glue(nand_init_, PAGE_SIZE)(NANDFlashState *s)
 {
     s->oob_shift = PAGE_SHIFT - 5;
+    __oob_shift = s->oob_shift;
+    if (s->buswidth == 2) { // 16 bit 
+        s->oob_shift++;
+        __oob_shift++;
+        __oob_size = (1 << __oob_shift);
+    }
     s->pages = s->size >> PAGE_SHIFT;
     s->addr_shift = ADDR_SHIFT;
 
