@@ -418,7 +418,6 @@ typedef struct XlnxZynqMPRPUCtrl {
     /* GIC associated to the RPUs. */
 #ifdef HPSC_R52
     GICv3State *gic;
-    GICv3State *A53_gic;
 #else
     XlnxSCUGICState *gic;
 #endif
@@ -867,11 +866,6 @@ static void rpu_realize(DeviceState *dev, Error **errp)
         return;
     }
 
-    if (!s->A53_gic) {
-        error_setg(errp, "gic-for-A53");
-        return;
-    }
-
     /* RPUs starts in lockstep mode, so the rpu1 caches are not accessible. */
     memory_region_set_enabled(s->icache_for_rpu1, false);
     memory_region_set_enabled(s->dcache_for_rpu1, false);
@@ -981,12 +975,6 @@ static void rpu_init(Object *obj)
     object_property_add_link(obj, "gic-for-rpu", TYPE_XLNX_SCU_GIC,
 #endif
                              (Object **)&s->gic,
-                             qdev_prop_allow_set_link_before_realize,
-                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
-                             &error_abort);
-
-    object_property_add_link(obj, "gic-for-A53", TYPE_ARM_GICV3,
-                             (Object **)&s->A53_gic,
                              qdev_prop_allow_set_link_before_realize,
                              OBJ_PROP_LINK_UNREF_ON_RELEASE,
                              &error_abort);
