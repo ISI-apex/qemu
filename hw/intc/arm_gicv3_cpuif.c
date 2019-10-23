@@ -2892,18 +2892,13 @@ void gicv3_init_cpuif(GICv3State *s)
     int i;
 
     for (i = 0; i < s->num_cpu; i++) {
-#ifdef HPSC
-        ARMCPU *cpu = ARM_CPU(qemu_get_cpu(s->cpu_start_id + i));
         GICv3CPUState *cs = &s->cpu[i];
+        ARMCPU *cpu = ARM_CPU(cs->cpu);
 
         /* fixup for GICR_TYPER of R52 */
         if (arm_feature(&cpu->env, ARM_FEATURE_V8R)) {
             s->cpu[i].gicr_typer &= ~(1 << 24);
         }
-#else
-        ARMCPU *cpu = ARM_CPU(qemu_get_cpu(i));
-        GICv3CPUState *cs = &s->cpu[i];
-#endif
 
         /* Note that we can't just use the GICv3CPUState as an opaque pointer
          * in define_arm_cp_regs_with_opaque(), because when we're called back
