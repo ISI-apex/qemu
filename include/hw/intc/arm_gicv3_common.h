@@ -27,6 +27,9 @@
 #include "hw/sysbus.h"
 #include "hw/intc/arm_gic_common.h"
 
+/* Maximum number of possible CPUs supported (actual count is dynamic) */
+#define GICV3_MAXCPUS 8
+
 /*
  * Maximum number of possible interrupts, determined by the GIC architecture.
  * Note that this does not include LPIs. When implemented, these should be
@@ -222,7 +225,6 @@ struct GICv3State {
     bool security_extn;
     bool irq_reset_nonsecure;
     bool gicd_no_migration_shift_bug;
-    uint32_t cpu_start_id; /* IDs of CPUs connected to the GIC */
     uint32_t gicd_typer; /* Interrupt Controller Type Register value */
 
     bool reset; /* latched value of resetn input signal */
@@ -253,6 +255,14 @@ struct GICv3State {
     uint32_t gicd_nsacr[DIV_ROUND_UP(GICV3_MAXIRQ, 16)];
 
     GICv3CPUState *cpu;
+
+    /* CPU handle array for binding to device tree node, CPU pointers are
+     * transfered into the 'cpu' array allocated dynamically based on num-cpus
+     * prop. We cannot bind dt node props to this dynamically allocated array
+     * because it is allocated in realize, when num-cpus prop value is available,
+     * but we need to setup links to CPU objects earlier in instance initialize.
+     */
+    CPUState *cpu_handles[GICV3_MAXCPUS];
 };
 
 #define GICV3_BITMAP_ACCESSORS(BMP)                                     \

@@ -2876,8 +2876,8 @@ void gicv3_init_cpuif(GICv3State *s)
     int i;
 
     for (i = 0; i < s->num_cpu; i++) {
-        ARMCPU *cpu = ARM_CPU(qemu_get_cpu(s->cpu_start_id + i));
         GICv3CPUState *cs = &s->cpu[i];
+        ARMCPU *cpu = ARM_CPU(cs->cpu);
 
         /* fixup for GICR_TYPER of R52 */
         if (arm_feature(&cpu->env, ARM_FEATURE_V8R)) {

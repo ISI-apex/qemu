@@ -360,6 +360,31 @@ static int arm_gicv3_common_fdt_get_irq(FDTGenericIntc *obj, qemu_irq *irqs,
     }
 }
 
+static void arm_gicv3_common_init(Object *obj)
+{
+    GICv3State *s = ARM_GICV3_COMMON(obj);
+    Error *errp = NULL;
+    int i;
+    char *prop_name;
+
+    /* Bind to device tree properties, values will be available on realize */
+    for (i = 0; i < GICV3_MAXCPUS; i++) {
+        prop_name = g_strdup_printf("cpu%d", i);
+        object_property_add_link(obj, prop_name, TYPE_CPU,
+                                 (Object **)&s->cpu_handles[i],
+                                 qdev_prop_allow_set_link_before_realize,
+                                 OBJ_PROP_LINK_STRONG,
+                                 &errp);
+        if (errp) {
+            error_prepend(&errp, "failed bind cpu handle to prop '%s'",
+                          prop_name);
+            g_free(prop_name);
+            error_propagate(&error_fatal, errp); /* exits process */
+        }
+        g_free(prop_name);
+    }
+}
+
 static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
 {
     GICv3State *s = ARM_GICV3_COMMON(dev);
@@ -403,9 +428,14 @@ static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
     s->cpu = g_new0(GICv3CPUState, s->num_cpu);
 
     for (i = 0; i < s->num_cpu; i++) {
-        CPUState *cpu = qemu_get_cpu(s->cpu_start_id + i);
         uint64_t cpu_affid;
         int last;
+        CPUState *cpu = s->cpu_handles[i];
+
+        if (!cpu) {
+            error_setg(errp, "'cpu%u' prop not set to a CPU handle", i);
+            return;
+        }
 
         s->cpu[i].cpu = cpu;
         s->cpu[i].gic = s;
@@ -560,7 +590,6 @@ static Property arm_gicv3_common_properties[] = {
     DEFINE_PROP_BOOL("has-security-extensions", GICv3State, security_extn, 0),
     DEFINE_PROP_ARRAY("redist-region-count", GICv3State, nb_redist_regions,
                       redist_region_count, qdev_prop_uint32, uint32_t),
-    DEFINE_PROP_UINT32("cpu-start-id", GICv3State, cpu_start_id, 0),
     DEFINE_PROP_UINT32("gicd-typer", GICv3State, gicd_typer, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
@@ -585,6 +614,7 @@ static const TypeInfo arm_gicv3_common_type = {
     .instance_size = sizeof(GICv3State),
     .class_size = sizeof(ARMGICv3CommonClass),
     .class_init = arm_gicv3_common_class_init,
+    .instance_init = arm_gicv3_common_init,
     .instance_finalize = arm_gicv3_finalize,
     .abstract = true,
     .interfaces = (InterfaceInfo []) {
