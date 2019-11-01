@@ -51,7 +51,7 @@
 #define GICD_SGIR            0x0F00
 #define GICD_CPENDSGIR       0x0F10
 #define GICD_SPENDSGIR       0x0F20
-#define GICD_IROUTER         0x6000
+#define GICD_IROUTER         0x6100
 #define GICD_IDREGS          0xFFD0
 
 /* GICD_CTLR fields  */
