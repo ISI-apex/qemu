@@ -630,23 +630,6 @@ static void zynqmp_rpu_cfg_post_write(RegisterInfo *reg, uint64_t val)
     }
 }
 
-static uint64_t rpu_1_cfg_pw(RegisterInfo *reg, uint64_t val)
-{
-    XlnxZynqMPRPUCtrl *s = XLNX_RPU_CTRL(reg->opaque);
-
-    /* Split-Mode: Remove R5-1 from hold upon request
-     * LockStep-Mode: Keep R5-1 under hold, to make only R5-0 run
-     *                in Lockstep.
-     */
-    if (!ARRAY_FIELD_EX32(s->regs, RPU_GLBL_CNTL, SLSPLIT)) {
-        /* Lock-Step Mode, Clear the hold bit to keep the
-         *  core in HOLD state.
-         */
-        val &= ~(R_RPU_1_CFG_NCPUHALT_MASK);
-    }
-    return val;
-}
-
 static const RegisterAccessInfo rpu_regs_info[] = {
     {   .name = "RPU_GLBL_CNTL",  .addr = A_RPU_GLBL_CNTL,
         .reset = 0x50,
@@ -721,7 +704,6 @@ static const RegisterAccessInfo rpu_regs_info[] = {
     },{ .name = "RPU_1_CFG",  .addr = A_RPU_1_CFG,
         .reset = 0x5,
         .rsvd = 0xfffffff0,
-        .pre_write = rpu_1_cfg_pw,
         .post_write = zynqmp_rpu_cfg_post_write,
     },{ .name = "RPU_1_STATUS",  .addr = A_RPU_1_STATUS,
         .reset = 0x3f,
