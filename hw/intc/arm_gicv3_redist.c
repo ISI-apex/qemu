@@ -244,6 +244,8 @@ static MemTxResult gicr_readl(GICv3CPUState *cs, hwaddr offset,
 static MemTxResult gicr_writel(GICv3CPUState *cs, hwaddr offset,
                                uint64_t value, MemTxAttrs attrs)
 {
+    uint64_t old_waker;
+
     switch (offset) {
     case GICR_CTLR:
         /* For our implementation, GICR_TYPER.DPGS is 0 and so all
@@ -272,7 +274,14 @@ static MemTxResult gicr_writel(GICv3CPUState *cs, hwaddr offset,
         if (value & GICR_WAKER_ProcessorSleep) {
             value |= GICR_WAKER_ChildrenAsleep;
         }
+        old_waker = cs->gicr_waker;
         cs->gicr_waker = value;
+
+        /* Waking adds/removes the CPU as a potentional 1-of-N destination PE */
+        if ((value & GICR_WAKER_ProcessorSleep) !=
+            (old_waker & GICR_WAKER_ProcessorSleep)) {
+            gicv3_cache_all_target_cpustates(cs->gic);
+        }
         return MEMTX_OK;
     case GICR_PROPBASER:
         cs->gicr_propbaser = deposit64(cs->gicr_propbaser, 0, 32, value);

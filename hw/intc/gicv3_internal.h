@@ -380,11 +380,16 @@ static inline void gicv3_cache_target_cpustate(GICv3State *s, int irq)
 {
     GICv3CPUState *cs = NULL;
     int i;
+    bool irm_is_1ofN = extract64(s->gicd_irouter[irq], 31, 1);
     uint32_t tgtaff = extract64(s->gicd_irouter[irq], 0, 24) |
         extract64(s->gicd_irouter[irq], 32, 8) << 24;
 
+    /* 1-of-N routing mode is implemented simply by always routing to a fixed
+     * CPU that is not asleep. Destination CPU changed only upon sleep/wake. */
+
     for (i = 0; i < s->num_cpu; i++) {
-        if (s->cpu[i].gicr_typer >> 32 == tgtaff) {
+        if ((irm_is_1ofN && !(s->cpu[i].gicr_waker & GICR_WAKER_ProcessorSleep))
+             || (!irm_is_1ofN && s->cpu[i].gicr_typer >> 32 == tgtaff)) {
             cs = &s->cpu[i];
             break;
         }
