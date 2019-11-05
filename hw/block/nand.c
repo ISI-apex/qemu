@@ -1122,6 +1122,7 @@ static void glue(nand_init_, PAGE_SIZE)(NANDFlashState *s)
 {
     s->oob_shift = PAGE_SHIFT - 5;
     __oob_shift = s->oob_shift;
+    __oob_size = (1 << __oob_shift);
     if (s->buswidth == 2) { // 16 bit 
         s->oob_shift++;
         __oob_shift++;
