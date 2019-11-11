@@ -213,7 +213,7 @@ static inline unsigned long find_first_zero_bit(const unsigned long *addr,
 static inline unsigned log2_of_pow2(unsigned long v)
 {
     assert(v);
-    int b = 1;
+    int b = 0;
     while ((v & 0x1) == 0x0) {
         v >>= 1;
         b++;
