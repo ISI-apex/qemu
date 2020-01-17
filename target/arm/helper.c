@@ -2075,6 +2075,13 @@ static CPAccessResult gt_vtimer_access(CPUARMState *env, const ARMCPRegInfo *ri,
     return gt_timer_access(env, GTIMER_VIRT, isread);
 }
 
+static CPAccessResult rmr_access(CPUARMState *env,
+                                       const ARMCPRegInfo *ri,
+                                       bool isread)
+{
+    return CP_ACCESS_OK;
+}
+
 static CPAccessResult gt_stimer_access(CPUARMState *env,
                                        const ARMCPRegInfo *ri,
                                        bool isread)
@@ -2586,6 +2593,11 @@ static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
       .fieldoffset = offsetof(CPUARMState, cp15.c14_timer[GTIMER_SEC].cval),
       .writefn = gt_sec_cval_write, .raw_writefn = raw_write,
     },
+    { .name = "RMR_EL3", .state = ARM_CP_STATE_AA64,
+      .opc0 = 3, .opc1 = 6, .crn = 12, .crm = 0, .opc2 = 2,
+      .accessfn = rmr_access, .access = PL3_RW,
+      .fieldoffset = offsetof(CPUARMState, cp15.rmr_el3),
+      .type = ARM_CP_IO, .resetvalue = 0x1 },
     REGINFO_SENTINEL
 };
 
