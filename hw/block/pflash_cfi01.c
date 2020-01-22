@@ -48,6 +48,8 @@
 #include "qemu/log.h"
 #include "hw/sysbus.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/blockdev.h"
+#include "qemu/error-report.h"
 
 #define PFLASH_BUG(fmt, ...) \
 do { \
@@ -100,6 +102,8 @@ struct pflash_t {
     void *storage;
     VMChangeStateEntry *vmstate;
     bool old_multiple_chip_handling;
+    uint32_t pflash_index;
+    
 };
 
 static int pflash_post_load(void *opaque, int version_id);
@@ -702,45 +706,31 @@ static const MemoryRegionOps pflash_cfi01_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-#if 1
-static int num_instances = 0;
-static void my_reset (DeviceState * dev) {
-    pflash_t *pfl = CFI_PFLASH01(dev);
-//    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-    char name[20];
-    int sector_length = object_property_get_int(OBJECT(dev), "sector-length", NULL);
-    int num_blocks = object_property_get_int(OBJECT(dev), "num-blocks", NULL);
-    unsigned int size = sector_length * num_blocks;
-
-    pfl->mem.size = size;
-
-    sprintf(name, "pflash_cfi01-%1d", num_instances++);
-printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
-/*
-    memory_region_init_io(&mm, OBJECT(dev), &pflash_cfi01_ops, pfl, name, pfl->mem.size);
-printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
-    sysbus_init_mmio(sbd, &pfl->mem);
-printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
-    memory_region_add_subregion(pfl->mem.container, pfl->mem.addr, & mm);
-*/
-}
-#endif
-#if 1
-static void my_initfn(Object * obj)
+static int pflash_set_drv(DeviceState *dev)
 {
-    pflash_t *pfl = CFI_PFLASH01(obj);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
-    char name[20];
-    sprintf(name, "pflash_cfi01-%1d", num_instances++);
+    Error *local_err = NULL;
+    pflash_t *pfl = CFI_PFLASH01(dev);
+    DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, pfl->pflash_index);
 
-#if 1
-    memory_region_init_io(&pfl->mem, OBJECT(obj), &pflash_cfi01_ops, pfl, name,
-                          0x1000);
-    sysbus_init_mmio(sbd, &pfl->mem);
-#endif
-printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
+    if (dinfo) 
+        pfl->blk = blk_by_legacy_dinfo(dinfo); 
+    else 
+        pfl->blk = NULL;
+    if (pfl->blk) {
+        if (blk_is_read_only(pfl->blk)) {
+            error_report("Can't use a read-only drive");
+            return -1;
+        }
+        qdev_prop_set_drive(dev, "drive", pfl->blk, &error_fatal);
+        blk_set_perm(pfl->blk, BLK_PERM_CONSISTENT_READ | BLK_PERM_WRITE,
+                           BLK_PERM_ALL, &local_err);
+        if (local_err) {
+            error_report_err(local_err);
+            return -1;
+        }
+    }
+    return 0;
 }
-#endif
 
 static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
 {
@@ -798,6 +788,8 @@ printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (
 
     pfl->storage = memory_region_get_ram_ptr(&pfl->mem);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &pfl->mem);
+
+    pflash_set_drv(dev);
 
     if (pfl->blk) {
         uint64_t perm;
@@ -919,6 +911,7 @@ printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (
     pfl->cfi_table[0x3c] = 0x00;
 
     pfl->cfi_table[0x3f] = 0x01; /* Number of protection fields */
+
 }
 
 static Property pflash_cfi01_properties[] = {
@@ -959,6 +952,7 @@ static Property pflash_cfi01_properties[] = {
     DEFINE_PROP_STRING("new-name", struct pflash_t, name),
     DEFINE_PROP_BOOL("old-multiple-chip-handling", struct pflash_t,
                      old_multiple_chip_handling, false),
+    DEFINE_PROP_UINT32("pflash-index", struct pflash_t, pflash_index, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -971,9 +965,6 @@ static void pflash_cfi01_class_init(ObjectClass *klass, void *data)
     dc->props = pflash_cfi01_properties;
     dc->vmsd = &vmstate_pflash;
     set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
-#if 1
-    dc->reset = my_reset;
-#endif
 }
 
 
@@ -982,9 +973,6 @@ static const TypeInfo pflash_cfi01_info = {
     .parent         = TYPE_SYS_BUS_DEVICE,
     .instance_size  = sizeof(struct pflash_t),
     .class_init     = pflash_cfi01_class_init,
-#if 1
-    .instance_init = my_initfn,
-#endif
 };
 
 static void pflash_cfi01_register_types(void)

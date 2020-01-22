@@ -37,13 +37,9 @@ struct OFFCHIP_SRAMState {
     SysBusDevice parent_obj;
     uint32_t rank;	/* index of memory rank */
     uint32_t pflash_index;	/* index of pflash device */
-    uint32_t region_size;	/* size of SRAM */
-    uint32_t start_addr_high;	/* start address high */
-    uint32_t start_addr_low;	/* start address low */
-    uint64_t addr;	/* address for debugging */
     MemoryRegion iomem;
-    MemoryRegion container;
     BlockBackend *blk;
+    uint32_t size;	/* size of SRAM */
 };
 
 #define TYPE_OFFCHIP_SRAM "offchip-sram"
@@ -51,18 +47,12 @@ struct OFFCHIP_SRAMState {
 #define OFFCHIP_SRAM(obj) \
     OBJECT_CHECK(OFFCHIP_SRAMState, (obj), TYPE_OFFCHIP_SRAM)
 
-static void offchip_sram_reset(DeviceState *dev)
-{
-    OFFCHIP_SRAMState *s = OFFCHIP_SRAM(dev);
-    s->addr = 0;
-}
-
 static const VMStateDescription vmstate_offchip_sram = {
     .name = "offchip-sram-vm",
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT64(addr, OFFCHIP_SRAMState),
+        VMSTATE_UINT32(size, OFFCHIP_SRAMState),
         /* XXX: do we want to save s->storage too? */
         VMSTATE_END_OF_LIST()
     }
@@ -100,9 +90,8 @@ const MemoryRegionOps offchip_sram_ops = {
     }
 };
 
-static int offchip_sram_initfn(SysBusDevice *sbd)
+static void offchip_sram_realize(DeviceState *dev, Error **errp)
 {
-    DeviceState *dev = DEVICE(sbd);
     OFFCHIP_SRAMState*s = OFFCHIP_SRAM(dev);
     Error *local_err = NULL;
     DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, s->pflash_index);
@@ -113,40 +102,34 @@ static int offchip_sram_initfn(SysBusDevice *sbd)
     if (s->blk) {
         if (blk_is_read_only(s->blk)) {
             error_report("Can't use a read-only drive");
-            return -1;
+            return ;
         }
         qdev_prop_set_drive(dev, "drive", s->blk, &error_fatal);
         blk_set_perm(s->blk, BLK_PERM_CONSISTENT_READ | BLK_PERM_WRITE,
                            BLK_PERM_ALL, &local_err);
         if (local_err) {
             error_report_err(local_err);
-            return -1;
+            return ;
         }
     }
     memory_region_init_io(&s->iomem, OBJECT(s), &offchip_sram_ops, s,
-                          "nvram", s->region_size);
-    sysbus_init_mmio(sbd, &s->iomem);
-    return 0;
+                          "nvram", s->size);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+    return ;
 }
 static Property offchip_sram_properties[] = {
     DEFINE_PROP_DRIVE("drive", OFFCHIP_SRAMState, blk),
     DEFINE_PROP_UINT32("pflash-index", OFFCHIP_SRAMState, pflash_index, 0),
-    DEFINE_PROP_UINT32("region-size", OFFCHIP_SRAMState, region_size, 0),
-    DEFINE_PROP_UINT32("start-addr-high", OFFCHIP_SRAMState, start_addr_high, 0),
-    DEFINE_PROP_UINT32("start-addr-low", OFFCHIP_SRAMState, start_addr_low, 0),
-    DEFINE_PROP_UINT32("rank", OFFCHIP_SRAMState, rank, 0),
+    DEFINE_PROP_UINT32("size", OFFCHIP_SRAMState, size, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
 static void offchip_sram_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
-    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
-
-    k->init = offchip_sram_initfn;
-    dc->reset = offchip_sram_reset;
     dc->vmsd = &vmstate_offchip_sram;
     dc->props = offchip_sram_properties;
+    dc->realize = offchip_sram_realize;
 }
 
 static const TypeInfo offchip_sram_info = {
