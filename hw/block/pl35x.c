@@ -114,11 +114,53 @@ typedef struct PL35xState {
     uint8_t x; /* the "x" in pl35x */
 } PL35xState;
 
+static void init_itf_sram(gpointer data, gpointer opaque);
+static int pl35x_device_list_itf(Object * obj, void *opaque)
+{
+    GSList **list = opaque;
+
+    if (object_dynamic_cast(obj, "pl35x-itf")) {
+        *list = g_slist_append(*list, DEVICE(obj));
+    }
+    object_child_foreach(obj, pl35x_device_list_itf, opaque);
+    return 0;
+}
+
+static GSList *pl35x_get_device_list_itf(Object * obj)
+{
+    GSList *list = NULL;
+
+    object_child_foreach(obj, pl35x_device_list_itf, &list);
+    return list;
+}
+
+#if 0
+static int pl35x_device_list_cfi(Object * obj, void *opaque)
+{
+    GSList **list = opaque;
+
+    if (object_dynamic_cast(obj, "cfi.pflash01")) {
+        *list = g_slist_append(*list, DEVICE(obj));
+    }
+    object_child_foreach(obj, pl35x_device_list_cfi, opaque);
+    return 0;
+}
+
+static GSList *pl35x_get_device_list_cfi(Object * obj)
+{
+    GSList *list = NULL;
+
+    object_child_foreach(obj, pl35x_device_list_cfi, &list);
+    return list;
+}
+#endif
+
 static int pl35x_device_list_sram(Object * obj, void *opaque)
 {
     GSList **list = opaque;
 
     if (object_dynamic_cast(obj, "offchip-sram")) {
+/*    if (object_dynamic_cast(obj, "cfi.pflash01")) { */
         *list = g_slist_append(*list, DEVICE(obj));
     }
     object_child_foreach(obj, pl35x_device_list_sram, opaque);
@@ -540,10 +582,93 @@ const MemoryRegionOps nand_ops = {
     }
 };
 
+#define FLASH_SECTOR_SIZE (128 * 1024)   /* for Micron 512 Mb chip */
+static void init_itf(gpointer data, gpointer opaque)
+{
+//    GSList * list = data;
+//    PL35xItf *itf ;
+    DeviceState * dev = opaque;
+    PL35xState *s = PL35X(dev);
+    char str[20];
+    uint32_t rank = object_property_get_int(OBJECT(data), "rank", NULL);
+    uint32_t interface = object_property_get_int(OBJECT(data), "interface", NULL);
+//    Object * chip = object_property_get_link(OBJECT(data), "chip", NULL);
+    rank = 0;
+
+    /* if child for sram exists */
+    DeviceState * child_dev = data;
+    GSList * list = pl35x_get_device_list_sram(OBJECT(child_dev));
+    g_slist_foreach(list, init_itf_sram, child_dev); 
+
+
+printf("%s: called\n", __func__); 
+    if (s->itf[interface][rank].dev == NULL) {
+//        s = (PL35xState *)itf[rank].parent;
+#if 0
+        s->itf[interface][rank].dev = DEVICE(data);
+#endif
+	char * dev_type = object_property_get_str(OBJECT(data), "dev-type", NULL);
+        uint32_t pflash_index = object_property_get_int(OBJECT(data), "pflash-index", NULL);
+        uint32_t bank_width = object_property_get_int(OBJECT(data), "bank-width", NULL);
+        if (!strcmp(dev_type, "sram")) {
+            sprintf(str, "pl35x.nor%1d",rank);
+            DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, pflash_index);
+            // memory_region_init_io(&s->itf[interface][rank].mm, OBJECT(data), &offchip_sram_ops, data, str, region_size);
+#if 0
+            if (s->itf[interface][rank].mm.container == NULL) { /* SRAM */
+                    memory_region_add_subregion(s->mmio.container, base_addr, &s->itf[interface][rank].mm);
+            }
+#endif
+/*	if (chip != NULL) 
+ 	    pflash_cfi01_set_drive(chip, dinfo? blk_by_legacy_dinfo(dinfo): NULL); */
+#if 0	/* Works, but disabled to test pointer-based approach */ 
+	printf("%s: base_addr(%lx), region_size(%lx), bank_width(%d)\n", __func__, base_addr, region_size, bank_width);
+            pflash_t * pflash0 = pflash_cfi01_register_wo_mem(base_addr, NULL, str, region_size,
+                    dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
+                    FLASH_SECTOR_SIZE, region_size/FLASH_SECTOR_SIZE,
+                    bank_width, 0x89, 0x7e, 0x23, 0x01, 0);
+                    //M28: bank_width, 0x89, 0x7e, 0x22, 0x01, 0);
+             MemoryRegion *flash0mem = sysbus_mmio_get_region(SYS_BUS_DEVICE(pflash0), 0);
+             MemoryRegion * mm = pflash_cfi01_get_memory(pflash0);
+             memory_region_add_subregion(s->mmio.container, base_addr, mm);
+             /* memory_region_add_subregion(s->mmio.container, base_addr, flash0mem); */
+             if (flash0mem == NULL) printf("Fail\n");
+#else
+	if (dinfo) printf("bank_width = %d\n", bank_width);
+#endif
+        } else { /* sram */
+            uint32_t high_addr = object_property_get_int(OBJECT(data), "start-addr-high", NULL);
+            uint32_t low_addr = object_property_get_int(OBJECT(data), "start-addr-low", NULL);
+            hwaddr base_addr = (uint64_t) high_addr << 32 | low_addr;
+            hwaddr region_size = object_property_get_int(OBJECT(data), "region-size", NULL);
+
+            sprintf(str, "pl35x.sram%1d",rank);
+            memory_region_init_io(&s->itf[interface][rank].mm, OBJECT(data), &offchip_sram_ops, data, str, region_size);
+            sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->itf[interface][rank].mm);
+            if (s->itf[interface][rank].mm.container == NULL) { /* SRAM */
+                    memory_region_add_subregion(s->mmio.container, base_addr, &s->itf[interface][rank].mm);
+            }
+        }
+    }
+}
+
 static void init_itf_sram(gpointer data, gpointer opaque)
 {
 //    GSList * list = data;
 //    PL35xItf *itf ;
+    /* can we get the memory of device(data) without knowing pflash_t?
+        memory_region_set_address
+       memory_region_set_size */
+#if 0
+        uint32_t high_addr = object_property_get_int(OBJECT(data), "start-addr-high",
+                                          NULL);
+        uint32_t low_addr = object_property_get_int(OBJECT(data), "start-addr-low",
+                                          NULL);
+        uint32_t region_size = object_property_get_int(OBJECT(data), "region-size",
+                                          NULL);
+	printf("%s: %x %x %x\n", __func__, high_addr, low_addr, region_size);
+#endif
+#if 1
     DeviceState * dev = opaque;
     PL35xState *s = PL35X(dev);
     char str[20];
@@ -552,11 +677,11 @@ static void init_itf_sram(gpointer data, gpointer opaque)
     if (s->itf[INTERFACE_SRAM][rank].dev == NULL) {
 //        s = (PL35xState *)itf[rank].parent;
         s->itf[INTERFACE_SRAM][rank].dev = DEVICE(data);
-        uint32_t high_addr = object_property_get_int(OBJECT(data), "start_addr_high",
+        uint32_t high_addr = object_property_get_int(OBJECT(data), "start-addr-high",
                                           NULL);
-        uint32_t low_addr = object_property_get_int(OBJECT(data), "start_addr_low",
+        uint32_t low_addr = object_property_get_int(OBJECT(data), "start-addr-low",
                                           NULL);
-        uint32_t region_size = object_property_get_int(OBJECT(data), "region_size",
+        uint32_t region_size = object_property_get_int(OBJECT(data), "region-size",
                                           NULL);
         sprintf(str, "pl35x.sram%1d",rank);
         memory_region_init_io(&s->itf[INTERFACE_SRAM][rank].mm, OBJECT(data), &offchip_sram_ops, data, str, region_size);
@@ -566,6 +691,7 @@ static void init_itf_sram(gpointer data, gpointer opaque)
                 memory_region_add_subregion(s->mmio.container, address, &s->itf[INTERFACE_SRAM][rank].mm);
         }
     }
+#endif
 }
 
 static void init_itf_nand(gpointer data, gpointer opaque)
@@ -574,15 +700,17 @@ static void init_itf_nand(gpointer data, gpointer opaque)
 //    PL35xItf *itf = opaque;
     DeviceState * dev = opaque;
     PL35xState *s = PL35X(dev);
-    char str[20];
+    char str[20], * pstr;
+    pstr = object_property_get_str(OBJECT(data), "id", NULL);
+    printf("id = %s\n", pstr);
     uint32_t rank = object_property_get_int(OBJECT(data), "rank", NULL);
     if (s->itf[INTERFACE_NAND][rank].dev == NULL) {
         s->itf[INTERFACE_NAND][rank].dev = DEVICE(data);
-        uint32_t high_addr = object_property_get_int(OBJECT(data), "start_addr_high",
+        uint32_t high_addr = object_property_get_int(OBJECT(data), "start-addr-high",
                                       NULL);
-        uint32_t low_addr = object_property_get_int(OBJECT(data), "start_addr_low",
+        uint32_t low_addr = object_property_get_int(OBJECT(data), "start-addr-low",
                                       NULL);
-        uint32_t region_size = object_property_get_int(OBJECT(data), "region_size",
+        uint32_t region_size = object_property_get_int(OBJECT(data), "region-size",
                                       NULL);
         sprintf(str, "pl35x.nand%1d", rank);
         memory_region_init_io(&s->itf[INTERFACE_NAND][rank].mm, OBJECT(dev), &nand_ops, &s->itf[INTERFACE_NAND][rank], str, region_size);
@@ -603,9 +731,19 @@ static void pl35x_reset(DeviceState *dev)
 {
     int i, j;
     PL35xState *s = PL35X(dev);
+printf("%s: mm->addr(0x%lx), mm->size(0x%llx)\n", __func__, s->mmio.addr, (long long int)s->mmio.size);
+    GSList * list = pl35x_get_device_list_itf(OBJECT(dev));
+    if (list == NULL) printf("pl35x-itf list is NULL\n");
+    else printf("pl35x-itf list is NOT NULL\n");
+    g_slist_foreach(list, init_itf, dev);
+    /* can we get memory_region_set_address
+       memory_region_set_size */
+
+#if 1
     /* if child for sram exists */
-    GSList * list = pl35x_get_device_list_sram(OBJECT(dev));
-    g_slist_foreach(list, init_itf_sram, s);
+    list = pl35x_get_device_list_sram(OBJECT(dev));
+    g_slist_foreach(list, init_itf_sram, s); 
+#endif
     /* if child for nand exists */
     list = pl35x_get_device_list_nand(OBJECT(dev));
     g_slist_foreach(list, init_itf_nand, dev);
@@ -692,10 +830,23 @@ static const VMStateDescription vmstate_pl35x = {
     }
 };
 
+#if 0
+static void my_realize(DeviceState *dev, Error **errp)
+{
+    GSList * list = pl35x_get_device_list_itf(OBJECT(dev));
+    if (list == NULL) printf("pl35x-itf list is NULL\n");
+    else printf("my_realize: pl35x-itf list is NOT NULL\n");
+    g_slist_foreach(list, init_itf, dev);
+
+}
+#endif
 static void pl35x_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
+#if 0
+    dc->realize = my_realize;
+#endif
     dc->reset = pl35x_reset;
     dc->props = pl35x_properties;
     dc->vmsd = &vmstate_pl35x;

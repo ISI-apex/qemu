@@ -55,7 +55,7 @@ do { \
     exit(1); \
 } while(0)
 
-/* #define PFLASH_DEBUG */
+#define PFLASH_DEBUG
 #ifdef PFLASH_DEBUG
 #define DPRINTF(fmt, ...)                                   \
 do {                                                        \
@@ -297,7 +297,7 @@ static uint32_t pflash_read (pflash_t *pfl, hwaddr offset,
 
     ret = -1;
 
-#if 0
+#if 1
     DPRINTF("%s: reading offset " TARGET_FMT_plx " under cmd %02x width %d\n",
             __func__, offset, pfl->cmd, width);
 #endif
@@ -676,6 +676,7 @@ static MemTxResult pflash_mem_read_with_attrs(void *opaque, hwaddr addr, uint64_
     } else {
         *value = pflash_read(opaque, addr, len, be);
     }
+printf("%s: addr(0x%lx), value(0x%lx)\n", __func__, addr, *value);
     return MEMTX_OK;
 }
 
@@ -684,6 +685,7 @@ static MemTxResult pflash_mem_write_with_attrs(void *opaque, hwaddr addr, uint64
 {
     pflash_t *pfl = opaque;
     bool be = !!(pfl->features & (1 << PFLASH_BE));
+printf("%s: addr(0x%lx), vaule(0x%lx)\n", __func__, addr, value);
 
     if ((pfl->features & (1 << PFLASH_SECURE)) && !attrs.secure) {
         return MEMTX_ERROR;
@@ -693,11 +695,52 @@ static MemTxResult pflash_mem_write_with_attrs(void *opaque, hwaddr addr, uint64
     }
 }
 
+
 static const MemoryRegionOps pflash_cfi01_ops = {
     .read_with_attrs = pflash_mem_read_with_attrs,
     .write_with_attrs = pflash_mem_write_with_attrs,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
+
+#if 1
+static int num_instances = 0;
+static void my_reset (DeviceState * dev) {
+    pflash_t *pfl = CFI_PFLASH01(dev);
+//    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    char name[20];
+    int sector_length = object_property_get_int(OBJECT(dev), "sector-length", NULL);
+    int num_blocks = object_property_get_int(OBJECT(dev), "num-blocks", NULL);
+    unsigned int size = sector_length * num_blocks;
+
+    pfl->mem.size = size;
+
+    sprintf(name, "pflash_cfi01-%1d", num_instances++);
+printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
+/*
+    memory_region_init_io(&mm, OBJECT(dev), &pflash_cfi01_ops, pfl, name, pfl->mem.size);
+printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
+    sysbus_init_mmio(sbd, &pfl->mem);
+printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
+    memory_region_add_subregion(pfl->mem.container, pfl->mem.addr, & mm);
+*/
+}
+#endif
+#if 1
+static void my_initfn(Object * obj)
+{
+    pflash_t *pfl = CFI_PFLASH01(obj);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+    char name[20];
+    sprintf(name, "pflash_cfi01-%1d", num_instances++);
+
+#if 1
+    memory_region_init_io(&pfl->mem, OBJECT(obj), &pflash_cfi01_ops, pfl, name,
+                          0x1000);
+    sysbus_init_mmio(sbd, &pfl->mem);
+#endif
+printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
+}
+#endif
 
 static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
 {
@@ -742,7 +785,7 @@ static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
         total_len != (32 * 1024 * 1024) && total_len != (64 * 1024 * 1024))
         return NULL;
 #endif
-
+printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
     memory_region_init_rom_device(
         &pfl->mem, OBJECT(dev),
         &pflash_cfi01_ops,
@@ -913,10 +956,12 @@ static Property pflash_cfi01_properties[] = {
     DEFINE_PROP_UINT16("id2", struct pflash_t, ident2, 0),
     DEFINE_PROP_UINT16("id3", struct pflash_t, ident3, 0),
     DEFINE_PROP_STRING("name", struct pflash_t, name),
+    DEFINE_PROP_STRING("new-name", struct pflash_t, name),
     DEFINE_PROP_BOOL("old-multiple-chip-handling", struct pflash_t,
                      old_multiple_chip_handling, false),
     DEFINE_PROP_END_OF_LIST(),
 };
+
 
 static void pflash_cfi01_class_init(ObjectClass *klass, void *data)
 {
@@ -926,6 +971,9 @@ static void pflash_cfi01_class_init(ObjectClass *klass, void *data)
     dc->props = pflash_cfi01_properties;
     dc->vmsd = &vmstate_pflash;
     set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
+#if 1
+    dc->reset = my_reset;
+#endif
 }
 
 
@@ -934,6 +982,9 @@ static const TypeInfo pflash_cfi01_info = {
     .parent         = TYPE_SYS_BUS_DEVICE,
     .instance_size  = sizeof(struct pflash_t),
     .class_init     = pflash_cfi01_class_init,
+#if 1
+    .instance_init = my_initfn,
+#endif
 };
 
 static void pflash_cfi01_register_types(void)
@@ -965,9 +1016,51 @@ pflash_t *pflash_cfi01_register(hwaddr base,
     qdev_prop_set_uint16(dev, "id2", id2);
     qdev_prop_set_uint16(dev, "id3", id3);
     qdev_prop_set_string(dev, "name", name);
+    qdev_prop_set_string(dev, "new-name", name);
     qdev_init_nofail(dev);
 
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
+    return CFI_PFLASH01(dev);
+}
+
+void pflash_cfi01_set_drive(Object * dev, BlockBackend * blk)
+{
+    pflash_t *pfl = CFI_PFLASH01(dev);
+    if (blk) {
+        pfl->blk = blk;
+    } else {
+        pfl->blk = NULL;
+    }
+}
+
+pflash_t *pflash_cfi01_register_wo_mem(hwaddr base,
+                                DeviceState *qdev, const char *name,
+                                hwaddr size,
+                                BlockBackend *blk,
+                                uint32_t sector_len, int nb_blocs,
+                                int bank_width, uint16_t id0, uint16_t id1,
+                                uint16_t id2, uint16_t id3, int be)
+{
+    DeviceState *dev = qdev_create(NULL, TYPE_CFI_PFLASH01);
+
+    qdev_prop_set_uint32(dev, "num-blocks", nb_blocs);
+    qdev_prop_set_uint64(dev, "sector-length", sector_len);
+    qdev_prop_set_uint8(dev, "width", bank_width);
+    qdev_prop_set_bit(dev, "big-endian", !!be);
+    qdev_prop_set_uint16(dev, "id0", id0);
+    qdev_prop_set_uint16(dev, "id1", id1);
+    qdev_prop_set_uint16(dev, "id2", id2);
+    qdev_prop_set_uint16(dev, "id3", id3);
+    qdev_prop_set_string(dev, "name", name);
+    qdev_prop_set_string(dev, "new-name", name);
+    qdev_init_nofail(dev);
+
+    pflash_t *pfl = CFI_PFLASH01(dev);
+    if (blk) {
+        pfl->blk = blk;
+    } else {
+        pfl->blk = NULL;
+    }
     return CFI_PFLASH01(dev);
 }
 

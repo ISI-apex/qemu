@@ -123,14 +123,17 @@ static int offchip_sram_initfn(SysBusDevice *sbd)
             return -1;
         }
     }
+    memory_region_init_io(&s->iomem, OBJECT(s), &offchip_sram_ops, s,
+                          "nvram", s->region_size);
+    sysbus_init_mmio(sbd, &s->iomem);
     return 0;
 }
 static Property offchip_sram_properties[] = {
     DEFINE_PROP_DRIVE("drive", OFFCHIP_SRAMState, blk),
-    DEFINE_PROP_UINT32("pflash_index", OFFCHIP_SRAMState, pflash_index, 0),
-    DEFINE_PROP_UINT32("region_size", OFFCHIP_SRAMState, region_size, 0),
-    DEFINE_PROP_UINT32("start_addr_high", OFFCHIP_SRAMState, start_addr_high, 0),
-    DEFINE_PROP_UINT32("start_addr_low", OFFCHIP_SRAMState, start_addr_low, 0),
+    DEFINE_PROP_UINT32("pflash-index", OFFCHIP_SRAMState, pflash_index, 0),
+    DEFINE_PROP_UINT32("region-size", OFFCHIP_SRAMState, region_size, 0),
+    DEFINE_PROP_UINT32("start-addr-high", OFFCHIP_SRAMState, start_addr_high, 0),
+    DEFINE_PROP_UINT32("start-addr-low", OFFCHIP_SRAMState, start_addr_low, 0),
     DEFINE_PROP_UINT32("rank", OFFCHIP_SRAMState, rank, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
