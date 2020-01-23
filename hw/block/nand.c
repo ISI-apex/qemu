@@ -658,9 +658,6 @@ static int nand_initfn(SysBusDevice *sbd)
     NANDFlashState*s = NAND(dev);
     Error *local_err = NULL;
     DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, s->pflash_index);
-
-    memory_region_init_io(&s->iomem, OBJECT(s), NULL, s, "nand",
-                          s->region_size);
     if (dinfo) 
         s->blk = blk_by_legacy_dinfo(dinfo); 
     else {
@@ -680,8 +677,6 @@ static int nand_initfn(SysBusDevice *sbd)
             return -1;
         }
     }
-    sysbus_init_mmio(sbd, &s->iomem);
-
     __nand_realize(dev, &local_err);
     return 0;
 }

@@ -57,7 +57,6 @@ do { \
     exit(1); \
 } while(0)
 
-#define PFLASH_DEBUG
 #ifdef PFLASH_DEBUG
 #define DPRINTF(fmt, ...)                                   \
 do {                                                        \
@@ -301,10 +300,8 @@ static uint32_t pflash_read (pflash_t *pfl, hwaddr offset,
 
     ret = -1;
 
-#if 1
     DPRINTF("%s: reading offset " TARGET_FMT_plx " under cmd %02x width %d\n",
             __func__, offset, pfl->cmd, width);
-#endif
     switch (pfl->cmd) {
     default:
         /* This should never happen : reset state & treat it as a read */
@@ -680,7 +677,6 @@ static MemTxResult pflash_mem_read_with_attrs(void *opaque, hwaddr addr, uint64_
     } else {
         *value = pflash_read(opaque, addr, len, be);
     }
-printf("%s: addr(0x%lx), value(0x%lx)\n", __func__, addr, *value);
     return MEMTX_OK;
 }
 
@@ -689,7 +685,6 @@ static MemTxResult pflash_mem_write_with_attrs(void *opaque, hwaddr addr, uint64
 {
     pflash_t *pfl = opaque;
     bool be = !!(pfl->features & (1 << PFLASH_BE));
-printf("%s: addr(0x%lx), vaule(0x%lx)\n", __func__, addr, value);
 
     if ((pfl->features & (1 << PFLASH_SECURE)) && !attrs.secure) {
         return MEMTX_ERROR;
@@ -775,7 +770,6 @@ static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
         total_len != (32 * 1024 * 1024) && total_len != (64 * 1024 * 1024))
         return NULL;
 #endif
-printf("%s: pfl.mem.addr(%lx), pfl.mem.size(%llx)\n", __func__, pfl->mem.addr, (long long int)pfl->mem.size);
     memory_region_init_rom_device(
         &pfl->mem, OBJECT(dev),
         &pflash_cfi01_ops,
