@@ -48,6 +48,8 @@
 #include "qemu/log.h"
 #include "hw/sysbus.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/blockdev.h"
+#include "qemu/error-report.h"
 
 #define PFLASH_BUG(fmt, ...) \
 do { \
@@ -100,6 +102,7 @@ struct pflash_t {
     void *storage;
     VMChangeStateEntry *vmstate;
     bool old_multiple_chip_handling;
+    uint32_t pflash_index;
 };
 
 static int pflash_post_load(void *opaque, int version_id);
@@ -297,10 +300,8 @@ static uint32_t pflash_read (pflash_t *pfl, hwaddr offset,
 
     ret = -1;
 
-#if 0
     DPRINTF("%s: reading offset " TARGET_FMT_plx " under cmd %02x width %d\n",
             __func__, offset, pfl->cmd, width);
-#endif
     switch (pfl->cmd) {
     default:
         /* This should never happen : reset state & treat it as a read */
@@ -699,6 +700,32 @@ static const MemoryRegionOps pflash_cfi01_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
+static int pflash_set_drv(DeviceState *dev)
+{
+    Error *local_err = NULL;
+    pflash_t *pfl = CFI_PFLASH01(dev);
+    DriveInfo *dinfo = drive_get_by_index(IF_PFLASH, pfl->pflash_index);
+
+    if (dinfo)
+        pfl->blk = blk_by_legacy_dinfo(dinfo);
+    else
+        pfl->blk = NULL;
+    if (pfl->blk) {
+        if (blk_is_read_only(pfl->blk)) {
+            error_report("Can't use a read-only drive");
+            return -1;
+        }
+        qdev_prop_set_drive(dev, "drive", pfl->blk, &error_fatal);
+        blk_set_perm(pfl->blk, BLK_PERM_CONSISTENT_READ | BLK_PERM_WRITE,
+                           BLK_PERM_ALL, &local_err);
+        if (local_err) {
+            error_report_err(local_err);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
 {
     pflash_t *pfl = CFI_PFLASH01(dev);
@@ -755,6 +782,8 @@ static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
 
     pfl->storage = memory_region_get_ram_ptr(&pfl->mem);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &pfl->mem);
+
+    pflash_set_drv(dev);
 
     if (pfl->blk) {
         uint64_t perm;
@@ -913,8 +942,10 @@ static Property pflash_cfi01_properties[] = {
     DEFINE_PROP_UINT16("id2", struct pflash_t, ident2, 0),
     DEFINE_PROP_UINT16("id3", struct pflash_t, ident3, 0),
     DEFINE_PROP_STRING("name", struct pflash_t, name),
+    DEFINE_PROP_STRING("new-name", struct pflash_t, name),
     DEFINE_PROP_BOOL("old-multiple-chip-handling", struct pflash_t,
                      old_multiple_chip_handling, false),
+    DEFINE_PROP_UINT32("pflash-index", struct pflash_t, pflash_index, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -965,9 +996,51 @@ pflash_t *pflash_cfi01_register(hwaddr base,
     qdev_prop_set_uint16(dev, "id2", id2);
     qdev_prop_set_uint16(dev, "id3", id3);
     qdev_prop_set_string(dev, "name", name);
+    qdev_prop_set_string(dev, "new-name", name);
     qdev_init_nofail(dev);
 
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
+    return CFI_PFLASH01(dev);
+}
+
+void pflash_cfi01_set_drive(Object * dev, BlockBackend * blk)
+{
+    pflash_t *pfl = CFI_PFLASH01(dev);
+    if (blk) {
+        pfl->blk = blk;
+    } else {
+        pfl->blk = NULL;
+    }
+}
+
+pflash_t *pflash_cfi01_register_wo_mem(hwaddr base,
+                                DeviceState *qdev, const char *name,
+                                hwaddr size,
+                                BlockBackend *blk,
+                                uint32_t sector_len, int nb_blocs,
+                                int bank_width, uint16_t id0, uint16_t id1,
+                                uint16_t id2, uint16_t id3, int be)
+{
+    DeviceState *dev = qdev_create(NULL, TYPE_CFI_PFLASH01);
+
+    qdev_prop_set_uint32(dev, "num-blocks", nb_blocs);
+    qdev_prop_set_uint64(dev, "sector-length", sector_len);
+    qdev_prop_set_uint8(dev, "width", bank_width);
+    qdev_prop_set_bit(dev, "big-endian", !!be);
+    qdev_prop_set_uint16(dev, "id0", id0);
+    qdev_prop_set_uint16(dev, "id1", id1);
+    qdev_prop_set_uint16(dev, "id2", id2);
+    qdev_prop_set_uint16(dev, "id3", id3);
+    qdev_prop_set_string(dev, "name", name);
+    qdev_prop_set_string(dev, "new-name", name);
+    qdev_init_nofail(dev);
+
+    pflash_t *pfl = CFI_PFLASH01(dev);
+    if (blk) {
+        pfl->blk = blk;
+    } else {
+        pfl->blk = NULL;
+    }
     return CFI_PFLASH01(dev);
 }
 
