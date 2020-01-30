@@ -688,15 +688,15 @@ static int nand_initfn(SysBusDevice *sbd)
 
 static Property nand_properties[] = {
     DEFINE_PROP_DRIVE("drive", NANDFlashState, blk),
-    DEFINE_PROP_UINT8("manufacturer_id", NANDFlashState, manf_id, 0),
-    DEFINE_PROP_UINT8("chip_id", NANDFlashState, chip_id, 0),
-    DEFINE_PROP_UINT32("pflash_index", NANDFlashState, pflash_index, 0),
-    DEFINE_PROP_UINT32("region_size", NANDFlashState, region_size, 0),
-    DEFINE_PROP_UINT32("start_addr_high", NANDFlashState, start_addr_high, 0),
-    DEFINE_PROP_UINT32("start_addr_low", NANDFlashState, start_addr_low, 0),
+    DEFINE_PROP_UINT8("manufacturer-id", NANDFlashState, manf_id, 0),
+    DEFINE_PROP_UINT8("chip-id", NANDFlashState, chip_id, 0),
+    DEFINE_PROP_UINT32("pflash-index", NANDFlashState, pflash_index, 0),
+    DEFINE_PROP_UINT32("region-size", NANDFlashState, region_size, 0),
+    DEFINE_PROP_UINT32("start-addr-high", NANDFlashState, start_addr_high, 0),
+    DEFINE_PROP_UINT32("start-addr-low", NANDFlashState, start_addr_low, 0),
     DEFINE_PROP_UINT32("rank", NANDFlashState, rank, 0),
-    DEFINE_PROP_UINT32("full_id_low", NANDFlashState, full_id_low, 0),
-    DEFINE_PROP_UINT32("full_id_high", NANDFlashState, full_id_high, 0),
+    DEFINE_PROP_UINT32("full-id-low", NANDFlashState, full_id_low, 0),
+    DEFINE_PROP_UINT32("full-id-high", NANDFlashState, full_id_high, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 

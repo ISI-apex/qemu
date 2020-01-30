@@ -552,11 +552,11 @@ static void init_itf_sram(gpointer data, gpointer opaque)
     if (s->itf[INTERFACE_SRAM][rank].dev == NULL) {
 //        s = (PL35xState *)itf[rank].parent;
         s->itf[INTERFACE_SRAM][rank].dev = DEVICE(data);
-        uint32_t high_addr = object_property_get_int(OBJECT(data), "start_addr_high",
+        uint32_t high_addr = object_property_get_int(OBJECT(data), "start-addr-high",
                                           NULL);
-        uint32_t low_addr = object_property_get_int(OBJECT(data), "start_addr_low",
+        uint32_t low_addr = object_property_get_int(OBJECT(data), "start-addr-low",
                                           NULL);
-        uint32_t region_size = object_property_get_int(OBJECT(data), "region_size",
+        uint32_t region_size = object_property_get_int(OBJECT(data), "region-size",
                                           NULL);
         sprintf(str, "pl35x.sram%1d",rank);
         memory_region_init_io(&s->itf[INTERFACE_SRAM][rank].mm, OBJECT(data), &offchip_sram_ops, data, str, region_size);
@@ -578,11 +578,11 @@ static void init_itf_nand(gpointer data, gpointer opaque)
     uint32_t rank = object_property_get_int(OBJECT(data), "rank", NULL);
     if (s->itf[INTERFACE_NAND][rank].dev == NULL) {
         s->itf[INTERFACE_NAND][rank].dev = DEVICE(data);
-        uint32_t high_addr = object_property_get_int(OBJECT(data), "start_addr_high",
+        uint32_t high_addr = object_property_get_int(OBJECT(data), "start-addr-high",
                                       NULL);
-        uint32_t low_addr = object_property_get_int(OBJECT(data), "start_addr_low",
+        uint32_t low_addr = object_property_get_int(OBJECT(data), "start-addr-low",
                                       NULL);
-        uint32_t region_size = object_property_get_int(OBJECT(data), "region_size",
+        uint32_t region_size = object_property_get_int(OBJECT(data), "region-size",
                                       NULL);
         sprintf(str, "pl35x.nand%1d", rank);
         memory_region_init_io(&s->itf[INTERFACE_NAND][rank].mm, OBJECT(dev), &nand_ops, &s->itf[INTERFACE_NAND][rank], str, region_size);
