@@ -674,17 +674,6 @@ static void nand_realize(DeviceState *dev, Error **errp)
     s->ioaddr = s->io;
 }
 
-static void nand_instance_init(Object *obj)
-{
-	SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
-    DeviceState *dev = DEVICE(sbd);
-    NANDFlashState *s = NAND(dev);
-
-    memory_region_init_io(&s->iomem, OBJECT(s), NULL, s, "nand",
-                          s->region_size);
-    sysbus_init_mmio(sbd, &s->iomem);
-}
-
 static Property nand_properties[] = {
     DEFINE_PROP_DRIVE("drive", NANDFlashState, blk),
     DEFINE_PROP_UINT8("manufacturer-id", NANDFlashState, manf_id, 0),
@@ -714,7 +703,6 @@ static const TypeInfo nand_info = {
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(NANDFlashState),
     .class_init    = nand_class_init,
-    .instance_init = nand_instance_init,
 };
 
 static void nand_register_types(void)
