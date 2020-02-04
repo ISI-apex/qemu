@@ -535,6 +535,7 @@ static void init_itf(gpointer data, gpointer opaque)
     if (s->itf[itf][rank].dev == NULL) {
         char str[100];
         Object * chip = object_property_get_link(OBJECT(data), "chip", NULL);
+        assert(chip);
         s->itf[itf][rank].dev = DEVICE(chip);
         uint32_t high_addr = object_property_get_int(OBJECT(chip),
                 "start-addr-high", NULL);
