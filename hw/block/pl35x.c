@@ -77,6 +77,9 @@ static const uint32_t pl35x_id[] = {
 #define REG_CYCLES_BASE	0x100
 #define REG_OPMODE_BASE 0x104
 
+#define ECC_IDLE	0x0
+#define ECC_IN_PROGRESS 0x1
+#define ECC_DONE	0x2
 
 typedef struct PL35xItf {
     MemoryRegion mm;
@@ -97,6 +100,8 @@ typedef struct PL35xItf {
     uint8_t mem_rank;
 } PL35xItf;
 
+#define PL35X_NUM_REGISTERS (0x550 >> 2)
+
 typedef struct PL35xState {
     SysBusDevice parent_obj;
 
@@ -108,7 +113,7 @@ typedef struct PL35xState {
 
     /* FIXME: add Interrupt support */
 
-    uint32_t regs[0x450 >> 2];
+    uint32_t regs[PL35X_NUM_REGISTERS];
 
     uint8_t x; /* the "x" in pl35x */
 } PL35xState;
@@ -247,6 +252,20 @@ static uint64_t pl35x_read(void *opaque, hwaddr addr,
     case 0x428:
         r = s->regs[addr >> 2];
 	break;
+    case 0x500: /* DK: ecc decode input 1 */
+    case 0x504: /* DK: ecc decode input 2 */
+    case 0x510: /* DK: ecc encode input */
+    case 0x514: /* DK: ecc encode output 1 */
+    case 0x518: /* DK: ecc encode output 2 */
+        r = s->regs[addr >> 2];
+	// printf("%s: address 0x%x is read, return 0x%x\n", __func__, addr, r);
+	break;
+    case 0x508: /* DK: ecc decode output */
+        r = s->regs[addr >> 2];
+    case 0x520: /* DK: ecc decode status */
+	r = s->regs[addr >> 2];	/* success for debugging */
+	// printf("%s: address 0x%x is read, return 0x%x\n", __func__, addr, r);
+	break;
     default:
         DB_PRINT("Unimplemented SMC read access reg=" TARGET_FMT_plx "\n",
                  addr);
@@ -331,12 +350,31 @@ static void pl35x_write(void *opaque, hwaddr addr, uint64_t value64,
     case 0x41c:
     case 0x420:
     case 0x424:
-    case 0x428: {
+    case 0x428: 
+    case 0x508: /* DK: ecc decode output */
+    case 0x510: /* DK: ecc encode input */
+    case 0x514: /* DK: ecc encode output 1 */
+    case 0x518: /* DK: ecc encode output 2 */
+		{
+	// printf("%s: address 0x%x is written with 0x%lx\n", __func__, addr, value64);
         s->regs[addr >> 2] = value64;
 	break;
     }
+    case 0x504: /* DK: ecc decode input 2 */
+		{
+        s->regs[addr >> 2] = value64;
+        s->regs[0x520 >> 2]++;	/* decode done */
+	break;
+    }
+    case 0x500: /* DK: ecc decode input 1 */
+		{
+        s->regs[addr >> 2] = value64;
+//	printf("%s: address 0x%x is written with 0x%lx\n", __func__, addr, value64);
+        s->regs[0x508 >> 2] = value64;	/* copy decode input1 to decode output */
+	break;
+    }
     default:
-        DB_PRINT("Unimplemented SMC read access reg=" TARGET_FMT_plx "\n",
+        DB_PRINT("Unimplemented SMC read write reg=" TARGET_FMT_plx "\n",
                  addr);
         break;
     }
@@ -573,6 +611,8 @@ static void pl35x_reset(DeviceState *dev)
             s->itf[i][j].interface = i;
             s->itf[i][j].mem_rank = j;
         }
+    for (i = 0; i < PL35X_NUM_REGISTERS; i++)
+        s->regs[i] = 0;
 }
 
 static int num_instances = 0;
