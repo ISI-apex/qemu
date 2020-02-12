@@ -7645,6 +7645,7 @@ static void v7m_push_stack(ARMCPU *cpu)
      */
     CPUARMState *env = &cpu->env;
     uint32_t xpsr = xpsr_read(env);
+    uint32_t fpen = extract32(env->cp15.cpacr_el1, 20, 2) % 1;
 
     /* Align stack pointer if the guest wants that */
     if ((env->regs[13] & 4) &&
@@ -7659,8 +7660,7 @@ static void v7m_push_stack(ARMCPU *cpu)
       env->vfp.fpccr |= (1 << 1);
       env->vfp.fpccr &= ~(1 << 3);
     }
-    /* DK: regardless of Lazy stacking setting, just push all FP registers */
-    if (arm_feature(env, ARM_FEATURE_VFP)) {
+    if (arm_feature(env, ARM_FEATURE_VFP)) && fpen) {
         uint32_t fpscr = vfp_get_fpscr(env);
         v7m_push(env, fpscr);	/* one more entry. But for what? for 64 bit alignment */
         v7m_push(env, fpscr);
@@ -7706,6 +7706,7 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
     bool rettobase = false;
     bool exc_secure = false;
     bool return_to_secure;
+    uint32_t fpen = extract32(env->cp15.cpacr_el1, 20, 2) % 1;
 
     /* If we're not in Handler mode then jumps to magic exception-exit
      * addresses don't have magic behaviour. However for the v8M
@@ -7972,7 +7973,7 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
 
         /* Commit to consuming the stack frame */
         frameptr += 0x20;
-        if (arm_feature(env, ARM_FEATURE_VFP)) {
+        if (arm_feature(env, ARM_FEATURE_VFP) && fpen) {
             env->vfp.regs[0>>1]  = ldl_phys(cs->as, frameptr+0x04);
             env->vfp.regs[0>>1]  <<= 32;
             env->vfp.regs[0>>1]  |= ldl_phys(cs->as, frameptr+0x00);
