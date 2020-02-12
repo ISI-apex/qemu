@@ -1109,11 +1109,17 @@ static uint32_t nvic_readl(NVICState *s, uint32_t offset, MemTxAttrs attrs)
     }
 }
 
+static bool nvic_security_needed(void *opaque);
+
 static void nvic_writel(NVICState *s, uint32_t offset, uint32_t value,
                         MemTxAttrs attrs)
 {
     ARMCPU *cpu = s->cpu;
 
+    if (!nvic_security_needed(s)) {
+        attrs.secure = 0;
+    }
+    
     switch (offset) {
     case 0x380 ... 0x3bf: /* NVIC_ITNS<n> */
     {
