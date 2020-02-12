@@ -1674,7 +1674,7 @@ MemTxResult memory_region_dispatch_readb(MemoryRegion *mr,
                                          MemTxAttrs attrs)
 {
     MemTxResult r = MEMTX_OK;
-    uint64_t val;
+    uint64_t val = 0;
     unsigned access_size;
 
     if (!memory_region_access_valid(mr, addr, size, false, attrs)) {
