@@ -262,7 +262,7 @@ static int fill_pkt_from_msg_desc(BRC1RIOEndpt *s, RioPkt *pkt, bool *interrupt,
     assert(pkt->seg_size % sizeof(uint64_t) == 0); /* enforced above */
     pkt->payload_len = pkt->seg_size / sizeof(uint64_t);
 
-    assert(pkt->seg_size <= RIO_MAX_PAYLOAD_SIZE);
+    /* assert(pkt->seg_size <= RIO_MAX_PAYLOAD_SIZE); */ /* true by data type */
     rc = dma_memory_read(s->dma_as, payload_ptr,
                          pkt->payload, pkt->seg_size);
     if (rc) {
