@@ -8959,6 +8959,7 @@ static bool v7m_push_stack(ARMCPU *cpu)
     uint32_t xpsr = xpsr_read(env);
     uint32_t frameptr = env->regs[13];
     ARMMMUIdx mmu_idx = arm_mmu_idx(env);
+    uint32_t fpen = extract32(env->cp15.cpacr_el1, 20, 2) % 1;
 
     /* Align stack pointer if the guest wants that */
     if ((frameptr & 4) &&
@@ -8968,7 +8969,7 @@ static bool v7m_push_stack(ARMCPU *cpu)
     }
 
     frameptr -= V7M_BASE_FRAME_SIZE;
-    if (arm_feature(env, ARM_FEATURE_VFP)) {
+    if (arm_feature(env, ARM_FEATURE_VFP) && fpen) {
         frameptr -= V7M_VFP_FRAME_SIZE;
     }
 
@@ -9008,7 +9009,7 @@ static bool v7m_push_stack(ARMCPU *cpu)
         v7m_stack_write(cpu, frameptr + 28, xpsr, mmu_idx, false);
 
     /* Regardless of Lazy stacking setting, just push all FP registers */
-    if (arm_feature(env, ARM_FEATURE_VFP)) { /* number of registers hardcoded above */
+    if (arm_feature(env, ARM_FEATURE_VFP) && fpen) { /* number of registers hardcoded above */
         uint32_t vfp_frameptr = frameptr + V7M_BASE_FRAME_SIZE;
 
         env->vfp.fpcar = vfp_frameptr - 4; /* pointer to S15. TODO: Is it correct? */
@@ -9052,6 +9053,7 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
     bool rettobase = false;
     bool exc_secure = false;
     bool return_to_secure;
+    uint32_t fpen = extract32(env->cp15.cpacr_el1, 20, 2) % 1;
 
     /* If we're not in Handler mode then jumps to magic exception-exit
      * addresses don't have magic behaviour. However for the v8M
@@ -9302,7 +9304,7 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
             v7m_stack_read(cpu, &env->regs[15], frameptr + 0x18, mmu_idx) &&
             v7m_stack_read(cpu, &xpsr, frameptr + 0x1c, mmu_idx);
 
-        if (arm_feature(env, ARM_FEATURE_VFP)) {
+        if (arm_feature(env, ARM_FEATURE_VFP) && fpen) {
             uint32_t vfp_frameptr = frameptr + V7M_BASE_FRAME_SIZE;
             pop_ok = pop_ok &&
                 v7m_stack_read64(cpu, &env->vfp.zregs[0].d[0], vfp_frameptr + 0x00, mmu_idx) &&
@@ -9367,7 +9369,7 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
 
         /* Commit to consuming the stack frame */
         frameptr += V7M_BASE_FRAME_SIZE;
-        if (arm_feature(env, ARM_FEATURE_VFP)) {
+        if (arm_feature(env, ARM_FEATURE_VFP) && fpen) {
             frameptr += V7M_VFP_FRAME_SIZE;
         }
 
@@ -9383,7 +9385,7 @@ static void do_v7m_exception_exit(ARMCPU *cpu)
         *frame_sp_p = frameptr;
     }
 
-    if (arm_feature(env, ARM_FEATURE_VFP)) {
+    if (arm_feature(env, ARM_FEATURE_VFP) && fpen) {
         vfp_set_fpscr(env, fpscr);
     }
 
